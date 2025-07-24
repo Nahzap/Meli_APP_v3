@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buscador de Usuarios</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <style>
+        .select2-container--default .select2-selection--single {
+            height: 42px;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 40px;
+        }
+        .select2-results__option {
+            padding: 8px 12px;
+        }
+        .select2-container--default .select2-results__option--highlighted[aria-selected] {
+            background-color: #3b82f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold text-center mb-8 text-gray-800">Buscador de Usuarios</h1>
+        
+        <!-- Formulario de búsqueda -->
+        <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-6 mb-8">
+            <!-- Mensajes de error -->
+            {% if error %}
+            <div class="mb-6 p-4 bg-red-100 border-l-4 border-red-500 text-red-700">
+                <p>{{ error }}</p>
+            </div>
+            {% endif %}
+            
+            <form id="searchForm" method="POST" action="{{ url_for('buscar') }}">
+                <div class="flex flex-col md:flex-row gap-4">
+                    <div class="flex-grow">
+                        <label for="searchInput" class="block text-sm font-medium text-gray-700 mb-1">Buscar por nombre de usuario</label>
+                        <select 
+                            id="searchInput" 
+                            name="usuario_id"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            style="width: 100%"
+                            required>
+                            <option value="">Escribe para buscar usuarios...</option>
+                        </select>
+                    </div>
+                    <div class="flex items-end">
+                        <button 
+                            type="submit"
+                            class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 h-10"
+                        >
+                            Buscar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Resultados de la búsqueda -->
+        {% if mostrar_resultados %}
+        <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4">Información del Usuario</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Información del usuario -->
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <h3 class="text-lg font-medium text-gray-900 border-b pb-2 mb-3">Datos de Cuenta</h3>
+                    <div class="space-y-2">
+                        <p><span class="font-medium">ID:</span> {{ usuario.id }}</p>
+                        <p><span class="font-medium">Usuario:</span> {{ usuario.username }}</p>
+                        <p><span class="font-medium">Tipo de Usuario:</span> {{ usuario.tipo_usuario | default('No especificado') }}</p>
+                        <p><span class="font-medium">Rol:</span> {{ usuario.role | default('regular') | capitalize }}</p>
+                        <p><span class="font-medium">Estado:</span> 
+                            <span class="px-2 py-1 text-xs rounded-full {{ 'bg-green-100 text-green-800' if usuario.status == 'active' else 'bg-red-100 text-red-800' }}">
+                                {{ 'Activo' if usuario.status == 'active' else (usuario.status | default('Desconocido') | capitalize) }}
+                            </span>
+                        </p>
+                        <p><span class="font-medium">Cuenta Activa:</span> {{ 'Sí' if usuario.activo else 'No' }}</p>
+                        <p><span class="font-medium">Registrado el:</span> {{ usuario.fecha_registro | datetimeformat('%d/%m/%Y %H:%M') if usuario.fecha_registro else 'No disponible' }}</p>
+                        <p><span class="font-medium">Último acceso:</span> {{ usuario.last_login | datetimeformat('%d/%m/%Y %H:%M') if usuario.last_login else 'Nunca' }}</p>
+                    </div>
+                    
+                    <!-- Sección de Código QR -->
+                    {% if usuario.id %}
+                    <div class="mt-6 qr-code-section">
+                      <h4 class="text-lg font-semibold">Código QR de Usuario</h4>
+                      
+                      <!-- Contenedor para el QR (inicialmente oculto) -->
+                      <div id="qrCodeContainer" class="hidden py-3">
+                        <img id="qrCodeImage" class="border border-gray-300 p-2 mb-2 max-w-xs" alt="Código QR de usuario">
+                      </div>
+                      
+                      <!-- Botones de acción -->
+                      <div class="flex space-x-3">
+                        <!-- Botón Generar QR -->
+                        <button id="generateQRBtn" 
+                                data-uuid="{{ usuario.id }}" 
+                                class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                          Generar QR
+                        </button>
+                        
+                        <!-- Botón Guardar QR (inicialmente oculto) -->
+                        <a id="saveQRBtn" 
+                           class="hidden bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded cursor-pointer">
+                          Guardar QR
+                        </a>
+                      </div>
+                      
+                      <!-- Mensajes de estado -->
+                      <div id="qrStatusMessage" class="mt-2 text-sm hidden"></div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Información de contacto -->
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <h3 class="text-lg font-medium text-gray-900 border-b pb-2 mb-3">Información de Contacto</h3>
+                    <div class="space-y-2">
+                        <p><span class="font-medium">Nombre:</span> {{ contacto.nombre_completo or 'No disponible' }}</p>
+                        <p><span class="font-medium">Empresa:</span> {{ contacto.nombre_empresa or 'No disponible' }}</p>
+                        <p><span class="font-medium">Email:</span> {{ contacto.correo_principal or 'No disponible' }}</p>
+                        <p><span class="font-medium">Teléfono:</span> {{ contacto.telefono_principal or 'No disponible' }}</p>
+                        <p><span class="font-medium">Dirección:</span> {{ contacto.direccion or 'No disponible' }}</p>
+                        <p><span class="font-medium">Comuna:</span> {{ contacto.comuna or 'No disponible' }}</p>
+                        <p><span class="font-medium">Región:</span> {{ contacto.region or 'No disponible' }}</p>
+                    </div>
+                </div>
+                
+                <!-- Sección de Ubicaciones -->
+                {% if tiene_ubicaciones %}
+                <div class="md:col-span-2 bg-gray-50 p-4 rounded-lg mt-4">
+                    <h3 class="text-lg font-medium text-gray-900 border-b pb-2 mb-3">Ubicaciones</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-100">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Coordenadas</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Norma</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descripción</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for ubicacion in ubicaciones %}
+                                <tr>
+                                    <td class="px-4 py-2 whitespace-nowrap">{{ ubicacion.nombre }}</td>
+                                    <td class="px-4 py-2 whitespace-nowrap">
+                                        <a href="https://www.google.com/maps?q={{ ubicacion.latitud }},{{ ubicacion.longitud }}" 
+                                           target="_blank" 
+                                           class="text-blue-600 hover:underline"
+                                           title="Ver en Google Maps">
+                                            {{ "%.6f, %.6f"|format(ubicacion.latitud|float, ubicacion.longitud|float) }}
+                                        </a>
+                                    </td>
+                                    <td class="px-4 py-2 whitespace-nowrap">{{ ubicacion.norma_geo }}</td>
+                                    <td class="px-4 py-2">{{ ubicacion.descripcion or '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% else %}
+                <div class="md:col-span-2 bg-gray-50 p-4 rounded-lg mt-4">
+                    <p class="text-gray-500 text-center">No se encontraron ubicaciones registradas para este usuario.</p>
+                </div>
+                {% endif %}
+                
+                <!-- Sección de Producciones Apícolas -->
+                {% if tiene_producciones %}
+                <div class="md:col-span-2 bg-gray-50 p-4 rounded-lg mt-4">
+                    <h3 class="text-lg font-medium text-gray-900 border-b pb-2 mb-3">Producciones Apícolas</h3>
+                    <div class="space-y-4">
+                        {% for prod in producciones %}
+                        <div class="bg-white p-4 rounded-lg shadow">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h4 class="font-semibold text-gray-800">Temporada: {{ prod.temporada }}</h4>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                                        <div>
+                                            <p class="text-sm text-gray-600">Colmenas</p>
+                                            <p class="font-medium">{{ prod.num_colmenas or 'No especificado' }}</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-sm text-gray-600">Apiarios</p>
+                                            <p class="font-medium">{{ prod.num_apiarios or 'No especificado' }}</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-sm text-gray-600">Miel Producida</p>
+                                            <p class="font-medium">
+                                                {% if prod.kg_miel_producida %}
+                                                    {{ "%.2f kg"|format(prod.kg_miel_producida|float) }}
+                                                {% else %}
+                                                    No especificado
+                                                {% endif %}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {% if prod.tipo_miel_principal %}
+                                    <div class="mt-2">
+                                        <p class="text-sm text-gray-600">Tipo de Miel Principal</p>
+                                        <p class="font-medium">{{ prod.tipo_miel_principal }}</p>
+                                    </div>
+                                    {% endif %}
+                                    {% if prod.estado_certificacion %}
+                                    <div class="mt-2">
+                                        <p class="text-sm text-gray-600">Estado de Certificación</p>
+                                        <span class="px-2 py-1 text-xs rounded-full 
+                                            {% if prod.estado_certificacion == 'aprobado' %}
+                                                bg-green-100 text-green-800
+                                            {% elif prod.estado_certificacion == 'rechazado' %}
+                                                bg-red-100 text-red-800
+                                            {% else %}
+                                                bg-yellow-100 text-yellow-800
+                                            {% endif %}
+                                        ">
+                                            {{ prod.estado_certificacion|title }}
+                                        </span>
+                                        {% if prod.fecha_certificacion %}
+                                        <p class="text-xs text-gray-500 mt-1">
+                                            Certificado el: {{ prod.fecha_certificacion|datetimeformat }}
+                                        </p>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% if prod.codigo_qr %}
+                                <div class="ml-4">
+                                    <img src="{{ prod.codigo_qr }}" alt="Código QR" class="h-24 w-24">
+                                    <p class="text-xs text-center text-gray-500 mt-1">Código QR</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% if prod.otros_productos %}
+                            <div class="mt-3 pt-3 border-t">
+                                <p class="text-sm font-medium text-gray-700 mb-1">Otros Productos:</p>
+                                <ul class="list-disc list-inside text-sm text-gray-600">
+                                    {% for producto, cantidad in prod.otros_productos.items() %}
+                                    <li>{{ producto }}: {{ cantidad }}</li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="md:col-span-2 bg-gray-50 p-4 rounded-lg mt-4">
+                    <p class="text-gray-500 text-center">No se encontraron producciones apícolas registradas para este usuario.</p>
+                </div>
+                {% endif %}
+                
+                <!-- Sección de Orígenes Botánicos -->
+                {% if tiene_origenes_botanicos %}
+                <div class="md:col-span-2 bg-gray-50 p-4 rounded-lg mt-4">
+                    <h3 class="text-lg font-medium text-gray-900 border-b pb-2 mb-3">Orígenes Botánicos</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-100">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descripción de la Flora</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sector de Actividad</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transhumancia</th>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Características Orgánicas</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for origen in origenes_botanicos %}
+                                <tr>
+                                    <td class="px-4 py-2">{{ origen.descripcion_flora or '-' }}</td>
+                                    <td class="px-4 py-2">{{ origen.sector_actividad or '-' }}</td>
+                                    <td class="px-4 py-2">
+                                        {% if origen.hubo_transhumancia %}
+                                            Sí
+                                            {% if origen.detalles_transhumancia %}
+                                                <p class="text-sm text-gray-500 mt-1">{{ origen.detalles_transhumancia }}</p>
+                                            {% endif %}
+                                        {% else %}
+                                            No
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-4 py-2">{{ origen.caracteristicas_organicas or '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% else %}
+                <div class="md:col-span-2 bg-gray-50 p-4 rounded-lg mt-4">
+                    <p class="text-gray-500 text-center">No se encontraron orígenes botánicos registrados para este usuario.</p>
+                </div>
+                {% endif %}
+                
+                <!-- Sección de Solicitudes del Apicultor -->
+                {% if tiene_solicitudes %}
+                <div class="md:col-span-2 bg-gray-50 p-4 rounded-lg mt-4">
+                    <h3 class="text-lg font-medium text-gray-900 border-b pb-2 mb-3">Solicitudes de Apicultor</h3>
+                    <div class="space-y-4">
+                        {% for solicitud in solicitudes %}
+                        <div class="bg-white p-4 rounded-lg shadow">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h4 class="font-semibold text-gray-800">Solicitud #{{ loop.index }} - {{ solicitud.temporada or 'Sin temporada' }}</h4>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                                        <div>
+                                            <p class="text-sm text-gray-600">Nombre Completo</p>
+                                            <p class="font-medium">{{ solicitud.nombre_completo }}</p>
+                                        </div>
+                                        {% if solicitud.nombre_empresa %}
+                                        <div>
+                                            <p class="text-sm text-gray-600">Empresa</p>
+                                            <p class="font-medium">{{ solicitud.nombre_empresa }}</p>
+                                        </div>
+                                        {% endif %}
+                                        <div>
+                                            <p class="text-sm text-gray-600">Ubicación</p>
+                                            <p class="font-medium">{{ solicitud.comuna }}, {{ solicitud.region }}</p>
+                                        </div>
+                                        <div>
+                                            <p class="text-sm text-gray-600">Teléfono</p>
+                                            <p class="font-medium">{{ solicitud.telefono }}</p>
+                                        </div>
+                                    </div>
+                                    {% if solicitud.descripcion_miel %}
+                                    <div class="mt-2">
+                                        <p class="text-sm text-gray-600">Descripción de la Miel</p>
+                                        <p class="text-gray-700">{{ solicitud.descripcion_miel }}</p>
+                                    </div>
+                                    {% endif %}
+                                    {% if solicitud.ubicacion_apiario %}
+                                    <div class="mt-2">
+                                        <p class="text-sm text-gray-600">Ubicación del Apiario</p>
+                                        <p class="font-medium">{{ solicitud.ubicacion_apiario }}</p>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                <div class="text-right">
+                                    <span class="px-2 py-1 text-xs rounded-full 
+                                        {% if solicitud.status == 'aprobado' %}
+                                            bg-green-100 text-green-800
+                                        {% elif solicitud.status == 'rechazado' %}
+                                            bg-red-100 text-red-800
+                                        {% else %}
+                                            bg-yellow-100 text-yellow-800
+                                        {% endif %}
+                                    ">
+                                        {{ solicitud.status|title or 'Pendiente' }}
+                                    </span>
+                                    {% if solicitud.created_at %}
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        Creada: {{ solicitud.created_at|datetimeformat }}
+                                    </p>
+                                    {% endif %}
+                                    {% if solicitud.updated_at and solicitud.updated_at != solicitud.created_at %}
+                                    <p class="text-xs text-gray-500">
+                                        Actualizada: {{ solicitud.updated_at|datetimeformat }}
+                                    </p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="md:col-span-2 bg-gray-50 p-4 rounded-lg mt-4">
+                    <p class="text-gray-500 text-center">No se encontraron solicitudes de apicultor para este usuario.</p>
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="max-w-4xl mx-auto text-center text-gray-500 py-12">
+            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <p class="mt-2">Ingresa un nombre de usuario para buscar</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- QR Code Integration -->
+    <script>
+        function copyToClipboard(elementId) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+            
+            const text = element.textContent || element.innerText;
+            
+            // Crear elemento temporal
+            const tempInput = document.createElement('input');
+            tempInput.value = text;
+            document.body.appendChild(tempInput);
+            
+            // Seleccionar y copiar
+            tempInput.select();
+            document.execCommand('copy');
+            
+            // Limpiar
+            document.body.removeChild(tempInput);
+            
+            // Mostrar confirmación
+            const copyButton = document.querySelector(`[data-copy="${elementId}"]`);
+            if (copyButton) {
+                const originalText = copyButton.textContent;
+                copyButton.textContent = '¡Copiado!';
+                setTimeout(() => {
+                    copyButton.textContent = originalText;
+                }, 2000);
+            }
+        }
+
+        // Configurar funcionalidad de botones QR cuando el documento esté listo
+        document.addEventListener('DOMContentLoaded', function() {
+            // Referencias a elementos DOM para QR
+            const generateQRBtn = document.getElementById('generateQRBtn');
+            const saveQRBtn = document.getElementById('saveQRBtn');
+            const qrCodeContainer = document.getElementById('qrCodeContainer');
+            const qrCodeImage = document.getElementById('qrCodeImage');
+            const qrStatusMessage = document.getElementById('qrStatusMessage');
+            
+            // Mostrar mensajes de estado
+            function showStatus(message, isError = false) {
+                if (qrStatusMessage) {
+                    qrStatusMessage.textContent = message;
+                    qrStatusMessage.classList.remove('hidden', 'text-green-600', 'text-red-600');
+                    qrStatusMessage.classList.add(isError ? 'text-red-600' : 'text-green-600');
+                }
+            }
+            
+            // Solo proceder si el botón existe en la página
+            if (generateQRBtn) {
+                // Configurar el evento para generar el QR
+                generateQRBtn.addEventListener('click', function() {
+                    // Obtener UUID del atributo data-uuid
+                    const userId = this.getAttribute('data-uuid');
+                    // Extraer segmento UUID (primeros 8 caracteres)
+                    const uuidSegment = userId.toLowerCase().split('-')[0];
+                    
+                    // Mostrar indicador de carga
+                    generateQRBtn.textContent = 'Generando...';
+                    generateQRBtn.disabled = true;
+                    showStatus('Generando código QR...');
+                    
+                    // Llamar al endpoint para generar QR
+                    fetch(`/api/usuario/${uuidSegment}/qr?format=json`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.qr_code) {
+                                // Mostrar el QR generado
+                                qrCodeImage.src = data.qr_code;
+                                qrCodeContainer.classList.remove('hidden');
+                                saveQRBtn.classList.remove('hidden');
+                                
+                                // Configurar el botón de descarga
+                                saveQRBtn.href = data.qr_code;
+                                saveQRBtn.download = `qr_usuario_${uuidSegment}.png`;
+                                
+                                // Actualizar texto del botón
+                                generateQRBtn.textContent = 'Regenerar QR';
+                                
+                                // Mostrar mensaje de éxito
+                                showStatus('¡Código QR generado con éxito!', false);
+                            } else {
+                                // Mostrar mensaje de error
+                                showStatus('Error al generar el código QR: ' + (data.error || 'Error desconocido'), true);
+                                console.error('Error:', data.error || 'Error desconocido');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            showStatus('Error al comunicarse con el servidor', true);
+                        })
+                        .finally(() => {
+                            // Restaurar botón a estado normal
+                            generateQRBtn.disabled = false;
+                        });
+                });
+            }
+        });
+
+        $(document).ready(function() {
+            // Configurar Select2 para el campo de búsqueda
+            $('#searchInput').select2({
+                placeholder: 'Escribe para buscar usuarios...',
+                allowClear: true,
+                ajax: {
+                    url: '/sugerir',
+                    dataType: 'json',
+                    delay: 250,
+                    data: function (params) {
+                        return {
+                            q: params.term,
+                            _type: 'query',
+                            page: params.page || 1
+                        };
+                    },
+                    processResults: function (data, params) {
+                        params.page = params.page || 1;
+                        return {
+                            results: data.results || [],
+                            pagination: {
+                                more: data.pagination ? data.pagination.more : false
+                            }
+                        };
+                    },
+                    cache: true
+                },
+                minimumInputLength: 2,
+                escapeMarkup: function (markup) { return markup; },
+                templateResult: function(item) {
+                    if (item.loading) return 'Buscando...';
+                    return $('<div>').text(item.text);
+                },
+                templateSelection: function(item) {
+                    return item.text || 'Selecciona un usuario...';
+                }
+            });
+
+            // Manejar envío del formulario
+            $('#searchForm').on('submit', function(e) {
+                const selected = $('#searchInput').select2('data')[0];
+                if (!selected || !selected.id) {
+                    e.preventDefault();
+                    alert('Por favor selecciona un usuario de la lista');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

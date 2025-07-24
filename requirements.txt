@@ -1,0 +1,5 @@
+Flask==3.0.3
+python-dotenv==1.0.1
+supabase==2.3.4
+segno==1.6.1
+Werkzeug==3.0.1
