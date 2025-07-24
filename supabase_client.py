@@ -17,15 +17,16 @@ class SupabaseClient:
     
     def _initialize(self):
         """Inicializa el cliente de Supabase."""
-        # Cargar variables de entorno desde .env
-        env_loaded = load_dotenv(".env")
-        if not env_loaded:
-            raise ValueError("No se pudo cargar el archivo .env. Asegúrate de que existe en el directorio raíz.")
+        # Intentar cargar variables de entorno desde .env (para desarrollo local)
+        # Si no existe el archivo, continuar (para producción en Vercel)
+        load_dotenv(".env")
+        
+        # Obtener variables de entorno (desde .env o desde el sistema)
         self.url = os.getenv("SUPABASE_URL")
         self.key = os.getenv("SUPABASE_KEY")
         
         if not self.url or not self.key:
-            raise ValueError("Variables SUPABASE_URL y/o SUPABASE_KEY no definidas")
+            raise ValueError("Variables SUPABASE_URL y/o SUPABASE_KEY no definidas. Configúralas en Vercel dashboard o en archivo .env")
         
         try:
             self.client = create_client(self.url, self.key)
