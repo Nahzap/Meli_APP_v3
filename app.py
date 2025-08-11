@@ -194,7 +194,7 @@ def profile(user_id):
             'telefono': user_info.get('telefono') or contact_info.get('telefono'),
             'ubicacion': locations[0].get('nombre') if locations else None,
             'descripcion': user_info.get('descripcion', ''),
-            'especialidad': user_info.get('role', 'Apicultor'),
+                'especialidad': user_info.get('role', 'Apicultor'),
             'especialidades': [user_info.get('role')] if user_info.get('role') else [],
             'contacto_completo': contact_info,
             'ubicaciones': locations
@@ -384,9 +384,9 @@ def get_user_qr(uuid_segment):
         # Crear generador QR
         qr_generator = QRGenerator()
         
-        # Generar la URL web para el QR (apuntando al método buscar con UUID completo)
+        # Generar la URL web para el QR (apuntando directamente al perfil del usuario)
         base_url = request.url_root.rstrip('/')
-        profile_url = f"{base_url}/buscar?usuario_id={user_id}"
+        profile_url = f"{base_url}/profile/{user_id}"
         
         # Generar QR directamente con segno
         qr = segno.make(profile_url, error='m')
