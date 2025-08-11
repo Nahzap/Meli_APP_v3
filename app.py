@@ -195,7 +195,9 @@ def profile(user_id):
             'ubicacion': locations[0].get('nombre') if locations else None,
             'descripcion': user_info.get('descripcion', ''),
             'especialidad': user_info.get('role', 'Apicultor'),
-            'especialidades': [user_info.get('role')] if user_info.get('role') else []
+            'especialidades': [user_info.get('role')] if user_info.get('role') else [],
+            'contacto_completo': contact_info,
+            'ubicaciones': locations
         }
         
         return render_template('pages/profile.html', 
