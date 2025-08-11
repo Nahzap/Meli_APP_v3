@@ -1,0 +1,21 @@
+<!-- Search Form Component -->
+<div class="max-w-2xl mx-auto">
+    <form class="relative" action="/search" method="GET">
+        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+        </div>
+        <input 
+            type="search" 
+            name="q"
+            class="block w-full pl-12 pr-4 py-4 border border-slate-200 rounded-xl bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent shadow-sm"
+            placeholder="{{ placeholder|default('Buscar apicultores, ubicaciones o tipos de miel...') }}"
+            {% if value %}value="{{ value }}"{% endif %}
+            required
+        >
+        <button type="submit" class="absolute right-2 top-1/2 -translate-y-1/2 bg-primary text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors">
+            Buscar
+        </button>
+    </form>
+</div>

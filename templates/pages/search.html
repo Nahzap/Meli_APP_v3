@@ -1,0 +1,222 @@
+{% extends 'base/layout.html' %}
+
+{% block title %}Buscar - MeliAPP{% endblock %}
+{% block description %}Busca apicultores, ubicaciones y tipos de miel en toda la red MeliAPP{% endblock %}
+
+{% block content %}
+<!-- Search Header -->
+<section class="bg-white border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="max-w-2xl mx-auto">
+            <h1 class="text-3xl font-bold text-slate-900 mb-6 text-center">Buscar en MeliAPP</h1>
+            
+            <!-- Search Form with Autocomplete -->
+            <form class="relative" action="/buscar" method="POST" id="searchForm">
+                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                </div>
+                <input 
+                    type="search" 
+                    name="usuario_id"
+                    id="searchInput"
+                    class="block w-full pl-12 pr-4 py-4 border border-slate-200 rounded-xl bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent shadow-sm"
+                    placeholder="Busca por nombre, ID o especialidad..."
+                    autocomplete="off"
+                    required
+                >
+                <button type="submit" class="absolute right-2 top-1/2 -translate-y-1/2 bg-primary text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors">
+                    Buscar
+                </button>
+                
+                <!-- Suggestions Dropdown -->
+                <div id="suggestions" class="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg hidden">
+                    <div id="suggestionsList" class="max-h-64 overflow-y-auto">
+                        <!-- Suggestions will be populated here -->
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</section>
+
+<!-- Results Section -->
+<section class="py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {% if usuario %}
+        <!-- User Found -->
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
+            <div class="flex items-center mb-4">
+                <div class="w-16 h-16 bg-gradient-to-br from-primary to-amber-600 rounded-full flex items-center justify-center text-white text-xl font-bold">
+                    {{ usuario.nombre|first }}
+                </div>
+                <div class="ml-4">
+                    <h2 class="text-xl font-semibold text-slate-900">{{ usuario.nombre }}</h2>
+                    <p class="text-slate-600">{{ usuario.especialidad or 'Apicultor' }}</p>
+                </div>
+            </div>
+            
+            {% if usuario.descripcion %}
+            <p class="text-slate-600 mb-4">{{ usuario.descripcion }}</p>
+            {% endif %}
+            
+            <div class="flex justify-between items-center">
+                <a href="/profile/{{ usuario.id }}" class="text-primary hover:text-amber-600 font-medium">
+                    Ver perfil completo →
+                </a>
+                <a href="/qr/{{ usuario.id }}" class="text-slate-500 hover:text-primary">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 2h-3m6 3h-6m-6 3h3m-3 3v-1m-2-3h6m6-9a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if error %}
+        <!-- Error Message -->
+        <div class="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+            <svg class="mx-auto h-12 w-12 text-red-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <h3 class="text-lg font-medium text-red-900 mb-2">Error</h3>
+            <p class="text-red-600">{{ error }}</p>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Search with real-time suggestions
+const searchInput = document.getElementById('searchInput');
+const suggestions = document.getElementById('suggestions');
+const suggestionsList = document.getElementById('suggestionsList');
+let searchTimeout;
+
+// Debounced search suggestions
+function getSuggestions(query) {
+    if (query.length < 2) {
+        hideSuggestions();
+        return;
+    }
+
+    fetch(`/sugerir?q=${encodeURIComponent(query)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.suggestions && data.suggestions.length > 0) {
+                displaySuggestions(data.suggestions);
+            } else {
+                hideSuggestions();
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching suggestions:', error);
+            hideSuggestions();
+        });
+}
+
+function displaySuggestions(suggestionsData) {
+    suggestionsList.innerHTML = '';
+    
+    if (suggestionsData.length === 0) {
+        hideSuggestions();
+        return;
+    }
+    
+    suggestionsData.forEach((item, index) => {
+        const suggestionItem = document.createElement('div');
+        suggestionItem.className = 'suggestion-item px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-b-0';
+        suggestionItem.setAttribute('data-index', index);
+        suggestionItem.innerHTML = `
+            <div class="flex items-center">
+                <div class="w-8 h-8 bg-gradient-to-br from-primary to-amber-600 rounded-full flex items-center justify-center text-white text-sm font-bold mr-3">
+                    ${item.nombre.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                    <div class="font-medium text-slate-900">${item.nombre}</div>
+                    <div class="text-sm text-slate-600">${item.especialidad || 'Apicultor'}</div>
+                </div>
+            </div>
+        `;
+        
+        suggestionItem.addEventListener('click', () => {
+            searchInput.value = item.nombre;
+            hideSuggestions();
+            // Auto-submit form for immediate search
+            document.getElementById('searchForm').submit();
+        });
+        
+        suggestionsList.appendChild(suggestionItem);
+    });
+    
+    suggestions.classList.remove('hidden');
+    selectedIndex = -1;
+}
+
+function hideSuggestions() {
+    suggestions.classList.add('hidden');
+}
+
+// Event listeners
+searchInput.addEventListener('input', (e) => {
+    const query = e.target.value.trim();
+    
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        getSuggestions(query);
+    }, 300);
+});
+
+// Hide suggestions when clicking outside
+document.addEventListener('click', (e) => {
+    if (!searchInput.contains(e.target) && !suggestions.contains(e.target)) {
+        hideSuggestions();
+    }
+});
+
+// Handle form submission
+document.getElementById('searchForm').addEventListener('submit', (e) => {
+    hideSuggestions();
+});
+
+// Keyboard navigation
+let selectedIndex = -1;
+
+searchInput.addEventListener('keydown', (e) => {
+    const items = suggestionsList.querySelectorAll('.suggestion-item');
+    
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+        updateSelection(items);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedIndex = Math.max(selectedIndex - 1, -1);
+        updateSelection(items);
+    } else if (e.key === 'Enter') {
+        const selected = suggestionsList.querySelector('.bg-primary\/10');
+        if (selected) {
+            e.preventDefault();
+            selected.click();
+        }
+    } else if (e.key === 'Escape') {
+        hideSuggestions();
+    }
+});
+
+function updateSelection(items) {
+    items.forEach((item, index) => {
+        if (index === selectedIndex) {
+            item.classList.add('bg-primary/10');
+            item.classList.add('border-primary');
+        } else {
+            item.classList.remove('bg-primary/10');
+            item.classList.remove('border-primary');
+        }
+    });
+}
+</script>
+{% endblock %}

@@ -171,3 +171,40 @@ cython_debug/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Project specific
+TEMPLATES_BKP/
+*.backup
+*.bak
+*.tmp
+
+# Supabase
+.supabase/
+
+# Node modules (if any frontend build tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build artifacts
+static/dist/
+static/build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python virtual environment
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+logs/

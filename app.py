@@ -116,72 +116,139 @@ def list_tables_endpoint():
 # Inicializar el navegador de Supabase
 navegador = NavegadorSupabase(db.client)
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/', methods=['GET'])
+def home():
+    """
+    Página principal con diseño moderno y llamadas a la acción.
+    
+    GET /
+    """
+    return render_template('pages/home.html')
+
+@app.route('/search')
+def search():
+    """
+    Página de búsqueda con el nuevo template.
+    """
+    return render_template('pages/search.html')
+
+@app.route('/profile/<user_id>')
+def profile(user_id):
+    """
+    Página de perfil público con diseño moderno.
+    
+    GET /profile/<user_id>
+    """
+    try:
+        # Validar formato UUID o buscar por username
+        import uuid
+        try:
+            # Si es un UUID válido
+            uuid.UUID(user_id)
+            user_uuid = user_id
+            
+            # Buscar usuario por UUID exacto
+            user_response = navegador.supabase.table('usuarios').select('*').eq('id', user_uuid).execute()
+            if not user_response.data:
+                return render_template('pages/profile.html', 
+                                     error="Usuario no encontrado"), 404
+            user_info = user_response.data[0]
+            
+        except ValueError:
+            # Si no es UUID, buscar por username
+            if len(user_id) >= 2:
+                # Buscar por username (case-insensitive)
+                search_response = navegador.supabase.table('usuarios')\
+                    .select('*')\
+                    .ilike('username', f'%{user_id}%')\
+                    .limit(1)\
+                    .execute()
+                
+                if search_response.data:
+                    user_info = search_response.data[0]
+                    user_uuid = user_info['id']
+                else:
+                    return render_template('pages/profile.html', 
+                                         error="Usuario no encontrado"), 404
+            else:
+                return render_template('pages/profile.html', 
+                                     error="Por favor ingresa al menos 2 caracteres"), 400
+        
+        # Ahora user_info y user_uuid están definidos
+        # Buscar información de contacto
+        contact_response = navegador.supabase.table('info_contacto').select('*').eq('usuario_id', user_uuid).execute()
+        contact_info = contact_response.data[0] if contact_response.data else {}
+        
+        # Buscar ubicaciones
+        locations_response = navegador.supabase.table('ubicaciones').select('*').eq('usuario_id', user_uuid).execute()
+        locations = locations_response.data if locations_response.data else []
+        
+        # Generar QR
+        qr_url = url_for('get_user_qr', uuid_segment=user_uuid[:8], _external=True)
+        
+        # Preparar datos para la plantilla con columnas correctas
+        user_template_data = {
+            'id': user_uuid,
+            'nombre': user_info.get('username', 'Usuario'),
+            'email': contact_info.get('correo_personal'),
+            'telefono': user_info.get('telefono') or contact_info.get('telefono'),
+            'ubicacion': locations[0].get('nombre') if locations else None,
+            'descripcion': user_info.get('descripcion', ''),
+            'especialidad': user_info.get('role', 'Apicultor'),
+            'especialidades': [user_info.get('role')] if user_info.get('role') else []
+        }
+        
+        return render_template('pages/profile.html', 
+                             user=user_template_data,
+                             qr_url=qr_url)
+                              
+    except Exception as e:
+        logger.error(f"Error al cargar perfil: {str(e)}", exc_info=True)
+        return render_template('pages/profile.html', 
+                             error="Error al cargar el perfil"), 500
+
+# Mantener ruta antigua para compatibilidad
 @app.route('/buscar', methods=['GET', 'POST'])
 def buscar():
     """
-    Maneja las rutas / y /buscar para buscar y mostrar información de usuarios.
-    
-    Métodos:
-    - GET: Muestra el formulario de búsqueda o los resultados si se proporciona un usuario_id
-    - POST: Realiza la búsqueda por ID de usuario
+    Ruta de búsqueda que maneja búsquedas por nombre o ID.
     """
-    # Obtener el ID del usuario de los parámetros GET o del formulario POST
-    user_id = request.args.get('usuario_id', '').strip()
     if request.method == 'POST':
-        user_id = request.form.get('usuario_id', '').strip()
+        search_term = request.form.get('usuario_id', '').strip()
+        if search_term:
+            try:
+                # Buscar usuario por username o ID
+                if len(search_term) >= 2:
+                    # Buscar por username (case-insensitive)
+                    search_response = navegador.supabase.table('usuarios')\
+                        .select('id', 'username', 'role')\
+                        .ilike('username', f'%{search_term}%')\
+                        .limit(10)\
+                        .execute()
+                    
+                    # Si no se encuentra por username, buscar por ID exacto
+                    if not search_response.data:
+                        search_response = navegador.supabase.table('usuarios')\
+                            .select('id', 'username', 'role')\
+                            .eq('id', search_term)\
+                            .limit(1)\
+                            .execute()
+                    
+                    if search_response.data:
+                        user = search_response.data[0]
+                        return redirect(url_for('profile', user_id=user['id']))
+                    else:
+                        return render_template('pages/search.html', 
+                                             error="Usuario no encontrado")
+                else:
+                    return render_template('pages/search.html', 
+                                         error="Por favor ingresa al menos 2 caracteres")
+            except Exception as e:
+                logger.error(f"Error en búsqueda: {str(e)}")
+                return render_template('pages/search.html', 
+                                     error="Error al buscar usuario")
     
-    # Si el ID es un segmento corto (8 caracteres), buscar el usuario completo
-    if user_id and len(user_id) == 8 and '-' not in user_id:
-        matching_users = []
-        try:
-            # Buscar usuarios cuyo ID comience con el segmento
-            response = db.client.table('usuarios').select('id').execute()
-            matching_users = [user for user in response.data 
-                            if user.get('id', '').lower().startswith(user_id.lower())]
-            
-            if matching_users:
-                # Redirigir a la versión con el ID completo
-                return redirect(url_for('buscar', usuario_id=matching_users[0]['id']))
-                
-        except Exception as e:
-            logger.error(f"Error al buscar usuario por segmento {user_id}: {str(e)}", exc_info=True)
-    
-    # Si se proporcionó un ID de usuario (completo), realizar la búsqueda
-    if user_id and '-' in user_id:  # Verificar si es un UUID completo
-        user, contact, locations, producciones, origenes_botanicos, solicitudes, error_msg = navegador.get_user_data(user_id)
-        
-        if error_msg:
-            return render_template('buscar.html', error=error_msg)
-            
-        # Generar URL compartible
-        uuid_segment = navegador.get_uuid_segment(user_id)
-        shareable_url = url_for('get_usuario_by_uuid_segment', 
-                              uuid_segment=uuid_segment, 
-                              _external=True) if uuid_segment else ''
-        
-        # Preparar datos para la plantilla
-        context = {
-            'usuario': user,
-            'contacto': contact,
-            'ubicaciones': locations,
-            'producciones': producciones,
-            'origenes_botanicos': origenes_botanicos,
-            'solicitudes': solicitudes,
-            'usuario_id': user_id,
-            'uuid_segment': uuid_segment,
-            'shareable_url': shareable_url,
-            'mostrar_resultados': True,
-            'tiene_ubicaciones': bool(locations),
-            'tiene_producciones': bool(producciones),
-            'tiene_origenes_botanicos': bool(origenes_botanicos),
-            'tiene_solicitudes': bool(solicitudes)
-        }
-        
-        return render_template('buscar.html', **context)
-    
-    # Si es GET, mostrar el formulario de búsqueda
-    return render_template('buscar.html')
+    return redirect(url_for('search'))
 
 @app.route('/sugerir', methods=['GET'])
 def sugerir():
@@ -210,15 +277,15 @@ def sugerir():
             
         users = response.data if hasattr(response, 'data') else []
         
-        # Formatear resultados para Select2
-        results = [{
+        # Formatear resultados para el frontend
+        suggestions = [{
             'id': user['id'],
-            'text': f"{user.get('username', '')} ({user.get('tipo_usuario', 'user')})"
+            'nombre': user.get('username', ''),
+            'especialidad': user.get('role', 'Apicultor')
         } for user in users]
         
         return jsonify({
-            'results': results,
-            'pagination': {'more': False}
+            'suggestions': suggestions
         })
         
     except Exception as e:
