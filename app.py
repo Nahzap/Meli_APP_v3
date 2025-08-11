@@ -382,7 +382,7 @@ def get_user_qr(uuid_segment):
         # Crear generador QR
         qr_generator = QRGenerator()
         
-        # Generar la URL web para el QR (apuntando a la página de búsqueda con el UUID completo)
+        # Generar la URL web para el QR (apuntando al método buscar con UUID completo)
         base_url = request.url_root.rstrip('/')
         profile_url = f"{base_url}/buscar?usuario_id={user_id}"
         
@@ -391,27 +391,23 @@ def get_user_qr(uuid_segment):
         
         if qr_format == 'png':
             # Generar QR en PNG y devolverlo como archivo
-            qr_png = qr.png_bytes(scale=scale)
-            if qr_png:
-                return send_file(io.BytesIO(qr_png), mimetype='image/png')
-            else:
-                return jsonify({"error": "Error al generar QR"}), 500
-                
+            output = io.BytesIO()
+            qr.save(output, kind='png', scale=scale)
+            output.seek(0)
+            return send_file(output, mimetype='image/png', as_attachment=False, download_name=f'qr-{user_id}.png')
+        
         elif qr_format == 'json':
             # Generar QR en formato JSON con imagen base64
-            output = BytesIO()
+            output = io.BytesIO()
             qr.save(output, kind='png', scale=scale)
             qr_base64 = base64.b64encode(output.getvalue()).decode('ascii')
             
-            if qr_base64:
-                return jsonify({
-                    "success": True,
-                    "qr_code": f"data:image/png;base64,{qr_base64}",
-                    "user_id": user_id,
-                    "uuid_segment": uuid_segment
-                })
-            else:
-                return jsonify({"error": "Error al generar QR"}), 500
+            return jsonify({
+                "success": True,
+                "qr_code": f"data:image/png;base64,{qr_base64}",
+                "user_id": user_id,
+                "uuid_segment": uuid_segment
+            })
         else:
             return jsonify({"error": f"Formato '{qr_format}' no soportado. Formatos válidos: png, json"}), 400
             
