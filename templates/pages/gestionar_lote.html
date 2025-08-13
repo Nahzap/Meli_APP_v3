@@ -1,0 +1,214 @@
+{% extends "base/layout.html" %}
+
+{% block title %}Gestión de Lotes de Miel - MeliAPP{% endblock %}
+{% block description %}Sistema para gestionar lotes de miel en producción apícola{% endblock %}
+
+{% block extra_head %}
+<style>
+    .form-container {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    .form-label {
+        display: block;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+    .form-input {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
+        font-size: 1rem;
+    }
+    .form-input:focus {
+        outline: none;
+        border-color: #f59e0b;
+        box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+    }
+    .form-textarea {
+        min-height: 100px;
+        resize: vertical;
+    }
+    .btn-primary {
+        background-color: #f59e0b;
+        color: white;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.375rem;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    .btn-primary:hover {
+        background-color: #d97706;
+    }
+    .btn-primary:disabled {
+        background-color: #9ca3af;
+        cursor: not-allowed;
+    }
+    .alert {
+        padding: 1rem;
+        border-radius: 0.375rem;
+        margin-bottom: 1rem;
+    }
+    .alert-success {
+        background-color: #d1fae5;
+        color: #065f46;
+        border: 1px solid #a7f3d0;
+    }
+    .alert-error {
+        background-color: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #fca5a5;
+    }
+    .loading {
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-900 mb-2">Gestión de Lotes de Miel</h1>
+        <p class="text-gray-600">Registra y actualiza información de tus lotes de producción apícola</p>
+    </div>
+
+    <div class="form-container">
+        <div id="alert-container"></div>
+        
+        <form id="lote-form" class="bg-white shadow-lg rounded-lg p-6">
+            <div class="form-group">
+                <label class="form-label" for="usuario_id">ID del Usuario</label>
+                <input type="text" id="usuario_id" name="usuario_id" class="form-input" 
+                       placeholder="Ingresa el UUID del usuario" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="ubicacion_id">ID de la Ubicación</label>
+                <input type="text" id="ubicacion_id" name="ubicacion_id" class="form-input" 
+                       placeholder="Ingresa el UUID de la ubicación" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="temporada">Temporada</label>
+                <input type="text" id="temporada" name="temporada" class="form-input" 
+                       placeholder="Ej: 2024-2025" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="kg_producidos">Kilogramos Producidos</label>
+                <input type="number" id="kg_producidos" name="kg_producidos" class="form-input" 
+                       placeholder="Ej: 150.5" step="0.1" required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="descripcion_general">Descripción General</label>
+                <textarea id="descripcion_general" name="descripcion_general" class="form-input form-textarea" 
+                          placeholder="Describe las características del lote de miel"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="composicion_polen">Composición de Polen</label>
+                <input type="text" id="composicion_polen" name="composicion_polen" class="form-input" 
+                       placeholder="Ej: flores-silvestres-80%|eucalipto-20%">
+                <small class="text-gray-500">Formato: tipo-porcentaje|tipo-porcentaje</small>
+            </div>
+
+            <button type="submit" class="btn-primary w-full">
+                <span class="submit-text">Guardar Lote</span>
+                <span class="loading">Guardando...</span>
+            </button>
+        </form>
+
+        <div id="result-container" class="mt-6" style="display: none;">
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                <h3 class="text-lg font-semibold text-green-800 mb-2">✅ Lote Guardado Exitosamente</h3>
+                <p class="text-green-700">ID del lote: <span id="lote-id" class="font-mono"></span></p>
+                <button onclick="resetForm()" class="mt-2 text-green-600 hover:text-green-800 underline">
+                    Registrar otro lote
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const form = document.getElementById('lote-form');
+    const alertContainer = document.getElementById('alert-container');
+    const resultContainer = document.getElementById('result-container');
+    const loteIdSpan = document.getElementById('lote-id');
+
+    function showAlert(message, type = 'error') {
+        alertContainer.innerHTML = '';
+        const alert = document.createElement('div');
+        alert.className = `alert alert-${type}`;
+        alert.textContent = message;
+        alertContainer.appendChild(alert);
+        
+        if (type === 'success') {
+            setTimeout(() => alert.remove(), 5000);
+        }
+    }
+
+    function resetForm() {
+        form.reset();
+        resultContainer.style.display = 'none';
+        alertContainer.innerHTML = '';
+    }
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const submitText = submitBtn.querySelector('.submit-text');
+        const loadingText = submitBtn.querySelector('.loading');
+        
+        // Deshabilitar botón y mostrar loading
+        submitBtn.disabled = true;
+        submitText.style.display = 'none';
+        loadingText.style.display = 'inline';
+        
+        try {
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+            
+            // Convertir kg_producidos a número
+            data.kg_producidos = parseFloat(data.kg_producidos);
+            
+            const response = await fetch('/api/gestionar-lote', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showAlert('Lote guardado exitosamente', 'success');
+                loteIdSpan.textContent = result.loteId;
+                resultContainer.style.display = 'block';
+                form.style.display = 'none';
+            } else {
+                showAlert(result.error || 'Error al guardar el lote');
+            }
+        } catch (error) {
+            showAlert('Error de conexión: ' + error.message);
+        } finally {
+            // Rehabilitar botón
+            submitBtn.disabled = false;
+            submitText.style.display = 'inline';
+            loadingText.style.display = 'none';
+        }
+    });
+</script>
+{% endblock %}

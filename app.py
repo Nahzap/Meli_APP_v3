@@ -1,5 +1,5 @@
 import logging
-from flask import Flask, render_template, request, jsonify, url_for, redirect, send_file
+from flask import Flask, render_template, request, jsonify, url_for, redirect, send_file, session, g
 from datetime import datetime
 import io
 import os
@@ -24,8 +24,9 @@ logging.getLogger('httpx').setLevel(logging.WARNING)
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Inicialización de la aplicación
+# Configuración de la aplicación
 app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', 'meliapp-secret-key-change-in-production')
 
 # Filtro para formatear fechas en las plantillas
 @app.template_filter('datetimeformat')
@@ -49,6 +50,51 @@ PORT = int(os.environ.get('PORT', 3000))
 # Configuración para producción
 app.config['JSONIFY_PRETTYPRINT_REGULAR'] = False
 app.json.sort_keys = False
+
+# ====================
+# Funciones de autenticación
+# ====================
+
+def login_required(f):
+    """
+    Decorador que requiere que el usuario esté autenticado.
+    Si no está autenticado, redirige a la página de login.
+    """
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+@app.before_request
+def load_current_user():
+    """
+    Carga la información del usuario actual en g.user para todas las peticiones.
+    Mapea el UUID de autenticación al UUID de la tabla usuarios.
+    """
+    g.user = None
+    if 'user_id' in session:
+        auth_user_id = session.get('user_id')
+        
+        # Obtener el UUID de la tabla usuarios
+        user_uuid = None
+        try:
+            response = db.client.table('usuarios').select('id').eq('auth_user_id', auth_user_id).maybe_single().execute()
+            if hasattr(response, 'data') and response.data:
+                user_uuid = response.data['id']
+        except Exception as e:
+            logger.error(f"Error al mapear auth_user_id a user_uuid: {str(e)}")
+        
+        g.user = {
+            'id': auth_user_id,  # UUID de autenticación
+            'user_uuid': user_uuid,  # UUID de la tabla usuarios
+            'name': session.get('user_name'),
+            'email': session.get('user_email')
+        }
+
+# ====================
 
 # ====================
 # Endpoints de la API
@@ -109,6 +155,79 @@ def list_tables_endpoint():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@app.route('/api/gestionar-lote', methods=['POST'])
+def manejar_lote_de_miel():
+    """
+    Endpoint para crear o actualizar un lote de miel.
+    Actúa como un proxy seguro a la Edge Function de Supabase 'Honey_Manage_Lots'.
+    
+    POST /api/gestionar-lote
+    
+    Body JSON:
+    {
+        "usuario_id": "uuid-del-usuario",
+        "ubicacion_id": "uuid-de-la-ubicacion",
+        "temporada": "2024-2025",
+        "kg_producidos": 150.5,
+        "descripcion_general": "Miel de flores silvestres",
+        "composicion_polen": "flores-silvestres-80%|eucalipto-20%"
+    }
+    
+    Returns:
+    {
+        "success": true,
+        "loteId": "uuid-del-lote-creado"
+    }
+    """
+    try:
+        # Obtener los datos JSON enviados en la solicitud
+        datos_lote = request.get_json()
+        
+        if not datos_lote:
+            return jsonify({
+                "success": False, 
+                "error": "No se proporcionaron datos en la solicitud."
+            }), 400
+
+        # Validar campos requeridos
+        campos_requeridos = ['usuario_id', 'ubicacion_id', 'temporada', 'kg_producidos']
+        for campo in campos_requeridos:
+            if campo not in datos_lote:
+                return jsonify({
+                    "success": False, 
+                    "error": f"Campo requerido faltante: {campo}"
+                }), 400
+
+        # Invocar la Edge Function 'Honey_Manage_Lots' con los datos recibidos
+        resultado = db.invoke_edge_function_sync('Honey_Manage_Lots', datos_lote)
+        
+        # Verificar si hay error en la respuesta
+        if 'error' in resultado:
+            return jsonify({
+                "success": False,
+                "error": resultado.get('error', 'Error desconocido en la Edge Function')
+            }), 400
+
+        # Devolver la respuesta exitosa
+        return jsonify({
+            "success": True,
+            "loteId": resultado.get('loteId'),
+            "data": resultado
+        }), 200
+
+    except ValueError as ve:
+        return jsonify({
+            "success": False,
+            "error": f"Error de validación: {str(ve)}"
+        }), 400
+    except Exception as e:
+        # Manejar cualquier error que ocurra durante el proceso
+        app.logger.error(f"Error al invocar la Edge Function Honey_Manage_Lots: {e}")
+        return jsonify({
+            "success": False,
+            "error": f"Error interno del servidor: {str(e)}"
+        }), 500
+
 # ====================
 # Rutas de la interfaz web
 # ====================
@@ -131,6 +250,227 @@ def search():
     Página de búsqueda con el nuevo template.
     """
     return render_template('pages/search.html')
+
+@app.route('/gestionar-lote')
+@login_required
+def gestionar_lote():
+    """
+    Página para gestionar lotes de miel con formulario interactivo.
+    
+    GET /gestionar-lote
+    """
+    return render_template('pages/gestionar_lote.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """
+    Sistema de acceso para usuarios registrados.
+    
+    GET /login - Muestra el formulario de login
+    POST /login - Procesa el login con email y contraseña
+    """
+    if request.method == 'GET':
+        return render_template('pages/login.html')
+    
+    # Procesar login POST
+    try:
+        data = request.get_json() or request.form
+        email = data.get('email', '').strip().lower()
+        password = data.get('password', '')
+        
+        if not email or not password:
+            return jsonify({"success": False, "error": "Email y contraseña son requeridos"}), 400
+        
+        # Autenticar con Supabase Auth
+        auth_response = db.client.auth.sign_in_with_password({
+            "email": email,
+            "password": password
+        })
+        
+        if not auth_response.user:
+            return jsonify({"success": False, "error": "Credenciales inválidas"}), 401
+        
+        user = auth_response.user
+        
+        # Obtener información adicional del usuario desde info_contacto
+        contact_response = db.client.table('info_contacto')\
+            .select('id, nombre_completo, nombre_empresa')\
+            .eq('usuario_id', user.id)\
+            .execute()
+        
+        contact_info = contact_response.data[0] if contact_response.data else {}
+        
+        # Crear sesión con datos del usuario autenticado
+        session['user_id'] = str(user.id)
+        session['user_email'] = user.email
+        session['user_name'] = contact_info.get('nombre_completo') or user.user_metadata.get('full_name', user.email)
+        session['user_empresa'] = contact_info.get('nombre_empresa', '')
+        
+        return jsonify({
+            "success": True, 
+            "message": "Login exitoso",
+            "redirect_url": "/"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error en login: {str(e)}")
+        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
+@app.route('/logout')
+def logout():
+    """
+    Cierra la sesión del usuario actual.
+    
+    GET /logout
+    """
+    session.clear()
+    return redirect(url_for('login'))
+
+@app.route('/register')
+def register():
+    """
+    Página de registro con opciones de Google OAuth y registro manual.
+    
+    GET /register
+    """
+    return render_template('pages/register.html')
+
+@app.route('/api/register', methods=['POST'])
+def api_register():
+    """
+    API endpoint para registro manual de usuarios.
+    
+    POST /api/register
+    Body: {email, password, fullName, company}
+    """
+    try:
+        data = request.get_json() or request.form
+        email = data.get('email', '').strip().lower()
+        password = data.get('password', '')
+        full_name = data.get('fullName', '').strip()
+        company = data.get('company', '').strip()
+        
+        if not email or not password or not full_name:
+            return jsonify({"success": False, "error": "Todos los campos son requeridos"}), 400
+        
+        if len(password) < 6:
+            return jsonify({"success": False, "error": "La contraseña debe tener al menos 6 caracteres"}), 400
+        
+        # Crear usuario con Supabase Auth
+        auth_response = db.client.auth.sign_up({
+            "email": email,
+            "password": password,
+            "options": {
+                "data": {
+                    "full_name": full_name,
+                    "company": company
+                }
+            }
+        })
+        
+        if not auth_response.user:
+            return jsonify({"success": False, "error": "Error al crear usuario"}), 400
+        
+        user = auth_response.user
+        
+        # Crear entrada en info_contacto si no existe
+        try:
+            db.client.table('info_contacto').insert({
+                "usuario_id": str(user.id),
+                "nombre_completo": full_name,
+                "nombre_empresa": company,
+                "correo_principal": email
+            }).execute()
+        except Exception as e:
+            logger.warning(f"Error al crear info_contacto: {str(e)}")
+        
+        return jsonify({
+            "success": True,
+            "message": "Usuario creado exitosamente",
+            "redirect_url": "/login"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error en registro: {str(e)}")
+        return jsonify({"success": False, "error": "Error al crear cuenta"}), 500
+
+@app.route('/api/auth/google', methods=['POST'])
+def api_google_auth():
+    """
+    API endpoint para iniciar el flujo de autenticación con Google.
+    
+    POST /api/auth/google
+    """
+    try:
+        # Obtener la URL de redirección para Google OAuth
+        auth_response = db.client.auth.sign_in_with_oauth({
+            "provider": "google",
+            "options": {
+                "redirect_to": f"{request.url_root}auth/callback"
+            }
+        })
+        
+        if auth_response.url:
+            return jsonify({
+                "success": True,
+                "url": auth_response.url
+            })
+        else:
+            return jsonify({"success": False, "error": "Error al generar URL de Google"}), 500
+            
+    except Exception as e:
+        logger.error(f"Error en Google auth: {str(e)}")
+        return jsonify({"success": False, "error": "Error al conectar con Google"}), 500
+
+@app.route('/auth/callback')
+def auth_callback():
+    """
+    Callback para manejar el retorno de Google OAuth.
+    
+    GET /auth/callback
+    """
+    try:
+        code = request.args.get('code')
+        if not code:
+            return redirect(url_for('register'))
+        
+        # Intercambiar código por sesión
+        auth_response = db.client.auth.exchange_code_for_session(code)
+        
+        if auth_response.user:
+            user = auth_response.user
+            
+            # Verificar si ya existe en info_contacto
+            contact_response = db.client.table('info_contacto')\
+                .select('id')\
+                .eq('usuario_id', str(user.id))\
+                .execute()
+            
+            if not contact_response.data:
+                # Crear entrada en info_contacto
+                full_name = user.user_metadata.get('full_name', '')
+                company = user.user_metadata.get('company', '')
+                
+                db.client.table('info_contacto').insert({
+                    "usuario_id": str(user.id),
+                    "nombre_completo": full_name or user.email,
+                    "nombre_empresa": company,
+                    "correo_principal": user.email
+                }).execute()
+            
+            # Crear sesión
+            session['user_id'] = str(user.id)
+            session['user_email'] = user.email
+            session['user_name'] = user.user_metadata.get('full_name', user.email)
+            session['user_empresa'] = user.user_metadata.get('company', '')
+            
+            return redirect(url_for('home'))
+        else:
+            return redirect(url_for('register'))
+            
+    except Exception as e:
+        logger.error(f"Error en callback: {str(e)}")
+        return redirect(url_for('register'))
 
 @app.route('/profile/<user_id>')
 def profile(user_id):
@@ -190,12 +530,13 @@ def profile(user_id):
         user_template_data = {
             'id': user_uuid,
             'nombre': user_info.get('username', 'Usuario'),
-            'email': contact_info.get('correo_personal'),
+            'email': contact_info.get('correo_personal', ''),
             'telefono': user_info.get('telefono') or contact_info.get('telefono'),
             'ubicacion': locations[0].get('nombre') if locations else None,
             'descripcion': user_info.get('descripcion', ''),
-                'especialidad': user_info.get('role', 'Apicultor'),
+            'especialidad': user_info.get('role', 'Apicultor'),
             'especialidades': [user_info.get('role')] if user_info.get('role') else [],
+            'especialidades_completas': [user_info.get('role')] if user_info.get('role') else [],
             'contacto_completo': contact_info,
             'ubicaciones': locations
         }

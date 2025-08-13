@@ -7,15 +7,35 @@
 <!-- Profile Header -->
 <section class="bg-gradient-to-r from-primary to-amber-600">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div class="text-center">
-            <div class="w-24 h-24 bg-white rounded-full flex items-center justify-center text-primary text-3xl font-bold mx-auto mb-4 shadow-lg">
-                {{ user.nombre|first|upper }}
+        <div class="flex flex-col md:flex-row items-center">
+            <!-- Contenido del header -->
+            <!-- Left Column - Profile Info -->
+            <div class="w-full md:w-1/2 pr-0 md:pr-6 mb-8 md:mb-0 flex items-center justify-center">
+                <div class="text-center w-full">
+                    <div class="w-24 h-24 bg-white rounded-full flex items-center justify-center text-primary text-3xl font-bold mx-auto mb-4 shadow-lg">
+                        {{ user.nombre|first|upper }}
+                    </div>
+                    <h1 class="text-3xl font-bold text-white mb-2">{{ user.nombre }}</h1>
+                    <p class="text-amber-100 text-lg">{{ user.especialidad or 'Usuario' }}</p>
+                    <p class="text-amber-200 text-sm mt-1">Perfil de MeliAPP</p>
+                </div>
             </div>
-            <h1 class="text-3xl font-bold text-white mb-2">{{ user.nombre }}</h1>
-            <p class="text-amber-100 text-lg">{{ user.especialidad or 'Usuario' }}</p>
-            <p class="text-amber-200 text-sm mt-1">Perfil de MeliAPP</p>
+            
+            <!-- Right Column - Empty Container -->
+            <div class="w-full md:w-1/2 aspect-square bg-white bg-opacity-20 rounded-lg p-6 flex items-center justify-center">
+                <!-- Empty container for future content -->
+                <div class="text-center text-white opacity-70">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    <p>Contenido adicional</p>
+                </div>
+            </div>
         </div>
-    </div>
+        
+        <!-- Barra separadora para botones futuros -->
+        <div class=" w-full mt-8 pt-4 border-t border-white border-opacity-30\></div>
+ </div>
 </section>
 
 <!-- Profile Content -->
@@ -251,7 +271,10 @@
                 </div>
             </div>
         </div>
-    </div>
+        
+        <!-- Barra separadora para botones futuros -->
+        <div class=" w-full mt-8 pt-4 border-t border-white border-opacity-30\></div>
+ </div>
 </section>
 {% endblock %}
 
@@ -355,3 +378,5 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         }
     </script>
 {% endblock %}
+
+

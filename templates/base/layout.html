@@ -57,9 +57,27 @@
                 </div>
                 
                 <!-- Navigation -->
-                <nav class="hidden md:flex space-x-8">
-                    <a href="/" class="text-slate-600 hover:text-primary transition-colors">Inicio</a>
-                    <a href="/search" class="text-slate-600 hover:text-primary transition-colors">Buscar</a>
+                <nav class="hidden md:flex space-x-8 items-center">
+                    {% if g.user %}
+                        <a href="/" class="text-slate-600 hover:text-primary transition-colors">Inicio</a>
+                        <a href="/search" class="text-slate-600 hover:text-primary transition-colors">Buscar</a>
+                        <a href="/gestionar-lote" class="text-slate-600 hover:text-primary transition-colors">Gestionar Lotes</a>
+                        <div class="relative group">
+                            <a href="{% if g.user.user_uuid %}/profile/{{ g.user.user_uuid }}{% else %}#{% endif %}" class="text-slate-600 hover:text-primary transition-colors flex items-center">
+                                {{ g.user.name }}
+                                <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                </svg>
+                            </a>
+                            <div class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 hidden group-hover:block">
+                                <a href="{% if g.user.user_uuid %}/profile/{{ g.user.user_uuid }}{% else %}#{% endif %}" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Mi Perfil</a>
+                                <a href="/logout" class="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-100">Cerrar Sesión</a>
+                            </div>
+                        </div>
+                    {% else %}
+                        <a href="/login" class="text-slate-600 hover:text-primary transition-colors">Iniciar Sesión</a>
+                        <a href="/register" class="bg-primary text-white px-4 py-2 rounded-md hover:bg-primary-dark transition-colors">Registrarse</a>
+                    {% endif %}
                 </nav>
                 
                 <!-- Mobile menu button -->

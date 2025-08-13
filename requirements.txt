@@ -2,3 +2,5 @@ Flask
 python-dotenv
 supabase
 segno
+requests
+httpx

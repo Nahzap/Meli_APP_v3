@@ -106,6 +106,24 @@ class NavegadorSupabase:
             logger.error(error_msg, exc_info=True)
             return None, None, [], [], [], [], error_msg
     
+    def get_user_id_by_auth_id(self, auth_user_id: str) -> Optional[str]:
+        """
+        Obtiene el ID del usuario en la tabla 'usuarios' a partir del ID de autenticación.
+        
+        Args:
+            auth_user_id: ID del usuario desde la autenticación (Supabase Auth)
+            
+        Returns:
+            str: ID del usuario en la tabla 'usuarios' o None si no se encuentra
+        """
+        try:
+            response = self.supabase.table('usuarios').select('id').eq('auth_user_id', auth_user_id).maybe_single().execute()
+            if hasattr(response, 'data') and response.data:
+                return response.data['id']
+        except Exception as e:
+            print(f"Error al buscar usuario por auth_user_id {auth_user_id}: {str(e)}")
+        return None
+
     def get_tables(self) -> List[str]:
         """
         Obtiene la lista de tablas disponibles usando data_tables_supabase.

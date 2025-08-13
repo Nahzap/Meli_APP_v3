@@ -4,6 +4,8 @@ Módulo para manejar la conexión con Supabase.
 from supabase import create_client, Client
 from dotenv import load_dotenv
 import os
+import httpx
+import json
 
 class SupabaseClient:
     _instance = None
@@ -96,6 +98,91 @@ class SupabaseClient:
             .eq('usuario_id', user_id)\
             .order('created_at', desc=True)\
             .execute()
+    
+    async def invoke_edge_function(self, function_name: str, payload: dict):
+        """
+        Invoca una Edge Function de Supabase.
+        
+        Args:
+            function_name (str): Nombre de la función Edge
+            payload (dict): Datos a enviar
+            
+        Returns:
+            dict: Respuesta de la función
+        """
+        try:
+            # Construir la URL de la Edge Function
+            edge_url = f"{self.url}/functions/v1/{function_name}"
+            
+            # Obtener el token de autenticación
+            token = self.key
+            
+            # Headers para la petición
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+                'apikey': token
+            }
+            
+            # Realizar la petición asíncrona
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    edge_url,
+                    json=payload,
+                    headers=headers
+                )
+                
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    error_data = response.json() if response.content else {"error": "Error desconocido"}
+                    raise Exception(f"Edge Function error: {error_data}")
+                    
+        except Exception as e:
+            raise Exception(f"Error al invocar Edge Function: {str(e)}")
+    
+    def invoke_edge_function_sync(self, function_name: str, payload: dict):
+        """
+        Versión síncrona para invocar Edge Functions.
+        
+        Args:
+            function_name (str): Nombre de la función Edge
+            payload (dict): Datos a enviar
+            
+        Returns:
+            dict: Respuesta de la función
+        """
+        try:
+            import requests
+            
+            # Construir la URL de la Edge Function
+            edge_url = f"{self.url}/functions/v1/{function_name}"
+            
+            # Obtener el token de autenticación
+            token = self.key
+            
+            # Headers para la petición
+            headers = {
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+                'apikey': token
+            }
+            
+            # Realizar la petición síncrona
+            response = requests.post(
+                edge_url,
+                json=payload,
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                error_data = response.json() if response.content else {"error": "Error desconocido"}
+                raise Exception(f"Edge Function error: {error_data}")
+                
+        except Exception as e:
+            raise Exception(f"Error al invocar Edge Function: {str(e)}")
 
 # Instancia global
 db = SupabaseClient()
