@@ -38,6 +38,19 @@
  </div>
 </section>
 
+<!-- Edit Profile Button for Authenticated Users -->
+{% if g.user and g.user.user_uuid == user.id %}
+<section class="bg-white border-b">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <div class="flex justify-center">
+            <a href="/edit-profile" class="bg-primary text-white px-6 py-3 rounded-lg font-semibold hover:bg-amber-600 transition-colors shadow-md">
+                <i class="fas fa-edit mr-2"></i>Editar Perfil
+            </a>
+        </div>
+    </div>
+</section>
+{% endif %}
+
 <!-- Profile Content -->
 <section class="py-12">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">

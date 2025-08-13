@@ -26,7 +26,7 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',  # Permite cookies en navegación normal
     SESSION_COOKIE_NAME='meliapp_session',
-    PERMANENT_SESSION_LIFETIME=3600 * 24 * 7,  # 7 días
+    PERMANENT_SESSION_LIFETIME=3600 * 1,  # 1 hora
 )
 
 # Configuración
@@ -62,10 +62,12 @@ def load_user():
 # ====================
 
 from routes import api_bp, web_bp
+from edit_user_data import edit_bp
 
 # Registrar blueprints
 app.register_blueprint(api_bp)
 app.register_blueprint(web_bp)
+app.register_blueprint(edit_bp)
 
 def list_routes():
     """

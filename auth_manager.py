@@ -125,12 +125,25 @@ class AuthManager:
                 # Si no existe en usuarios, usar el auth_user_id como fallback
                 user_uuid = str(user.id)
             
-            # Crear sesión con datos consistentes
+            # Crear sesión de usuario
             session['user_id'] = user_uuid  # ID de la tabla usuarios
             session['auth_user_id'] = str(user.id)  # ID de autenticación
             session['user_email'] = user.email
             session['user_name'] = contact_info.get('nombre_completo') or user.user_metadata.get('full_name', user.email)
             session['user_empresa'] = contact_info.get('nombre_empresa', '')
+            
+            # Almacenar tokens JWT para RLS
+            try:
+                # Extraer tokens correctamente de la respuesta de Supabase
+                session_data = auth_response.session
+                if session_data:
+                    session['access_token'] = session_data.access_token
+                    session['refresh_token'] = session_data.refresh_token
+                    logger.info(f"JWT tokens stored in session for user: {user.email}")
+                else:
+                    logger.error("No session data in auth response")
+            except Exception as e:
+                logger.error(f"Error almacenando tokens JWT: {str(e)}")
             
             return {
                 "success": True,
@@ -333,6 +346,18 @@ class AuthManager:
                 session['user_email'] = user.email
                 session['user_name'] = user.user_metadata.get('full_name', user.email)
                 session['user_empresa'] = user.user_metadata.get('company', '')
+                
+                # Almacenar tokens JWT para RLS
+                try:
+                    session_data = auth_response.session
+                    if session_data:
+                        session['access_token'] = session_data.access_token
+                        session['refresh_token'] = session_data.refresh_token
+                        logger.info(f"JWT tokens stored from Google OAuth for user: {user.email}")
+                    else:
+                        logger.error("No session data in Google OAuth response")
+                except Exception as e:
+                    logger.error(f"Error almacenando tokens JWT de Google: {str(e)}")
                 
                 return {
                     "success": True,

@@ -773,3 +773,12 @@ def api_register():
     API endpoint para registro manual de usuarios.
     """
     return auth_manager.api_register()
+
+@web_bp.route('/edit-profile')
+@auth_manager.login_required
+def edit_profile():
+    """
+    Página de edición de perfil para usuarios autenticados.
+    Solo accesible si el usuario está logueado.
+    """
+    return render_template('pages/edit_profile.html')
