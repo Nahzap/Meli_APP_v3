@@ -63,11 +63,13 @@ def load_user():
 
 from routes import api_bp, web_bp
 from edit_user_data import edit_bp
+from debug_endpoint import debug_bp
 
 # Registrar blueprints
 app.register_blueprint(api_bp)
 app.register_blueprint(web_bp)
 app.register_blueprint(edit_bp)
+app.register_blueprint(debug_bp)
 
 def list_routes():
     """

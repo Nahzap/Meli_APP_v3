@@ -4,6 +4,7 @@ Permite actualizar cualquier tabla/campo desde formularios JSON con manejo de RL
 """
 
 from flask import jsonify, g, session
+import json
 from supabase import create_client
 import logging
 from datetime import datetime
@@ -155,20 +156,108 @@ class DatabaseModifier:
             if table == 'usuarios':
                 ref_field = 'auth_user_id'
                 ref_value = auth_user_id
+            elif table == 'info_contacto':
+                # CRÍTICO: Buscar el usuario_id correcto basado en auth_user_id
+                user_mapping = auth_client.table('usuarios').select('id').eq('auth_user_id', auth_user_id).single().execute()
+                if user_mapping.data:
+                    ref_field = 'usuario_id'
+                    ref_value = user_mapping.data['id']  # Usar el ID real del usuario
+                else:
+                    return {"success": False, "error": "Usuario no encontrado en la tabla usuarios"}, 404
             else:
-                # Para otras tablas, usar usuario_id
                 ref_field = 'usuario_id'
                 ref_value = user_uuid
             
             logger.info(f"Actualizando {table} para usuario {user_uuid} (auth_user_id: {auth_user_id})")
             logger.info(f"Datos a actualizar: {update_data}")
             
-            # Realizar actualización
-            update_result = auth_client.table(table).update(update_data).eq(ref_field, ref_value).execute()
-            
-            if not update_result.data or len(update_result.data) == 0:
-                logger.error("No se encontraron datos en la respuesta de actualización")
-                return {"success": False, "error": "No se pudo actualizar el registro"}, 500
+            # SOLUCIÓN RLS: Usar el usuario autenticado correctamente
+            try:
+                logger.info(f"=== DEBUG INICIO {table} ===")
+                logger.info(f"Usuario UUID: {user_uuid}")
+                logger.info(f"Campo ref: {ref_field} = {ref_value}")
+                logger.info(f"Datos update: {json.dumps(update_data, ensure_ascii=False)}")
+                
+                if table == 'info_contacto':
+                    # PASO CRÍTICO: Verificar que el usuario autenticado es el dueño
+                    logger.info(f"Verificando ownership: auth_user_id={auth_user_id} vs usuario_id={user_uuid}")
+                    
+                    # Paso 1: Verificar datos actuales
+                    current_data = auth_client.table(table).select('*').eq(ref_field, ref_value).execute()
+                    logger.info(f"Datos actuales: {json.dumps(current_data.data, ensure_ascii=False)}")
+                    
+                    if not current_data.data or len(current_data.data) == 0:
+                        logger.warning("Registro NO existe - CREANDO")
+                        create_data = {
+                            'usuario_id': user_uuid,
+                            'nombre_completo': update_data.get('nombre_completo', ''),
+                            'correo_principal': update_data.get('correo_principal', ''),
+                            'telefono_principal': update_data.get('telefono_principal', '')
+                        }
+                        create_data.update(update_data)
+                        
+                        insert_result = auth_client.table(table).insert(create_data).execute()
+                        logger.info(f"Insert resultado: {json.dumps(insert_result.data, ensure_ascii=False)}")
+                        
+                        updated_data = auth_client.table(table).select('*').eq(ref_field, ref_value).single().execute()
+                        logger.info(f"Datos después de insert: {json.dumps(updated_data.data, ensure_ascii=False)}")
+                    else:
+                        logger.info("Registro EXISTE - ACTUALIZANDO")
+                        
+                        # CRÍTICO: Verificar ownership via tabla usuarios
+                        # Buscar el auth_user_id asociado al usuario_id en info_contacto
+                        user_check = auth_client.table('usuarios').select('auth_user_id').eq('id', user_uuid).single().execute()
+                        
+                        if not user_check.data or str(user_check.data['auth_user_id']) != str(auth_user_id):
+                            logger.error(f"❌ NO AUTORIZADO: auth_user_id={auth_user_id} no coincide con owner del registro")
+                            return {"success": False, "error": "Usuario no autorizado para modificar este registro"}, 403
+                        
+                        # Ejecutar update con usuario autenticado
+                        update_result = auth_client.table(table).update(update_data).eq(ref_field, ref_value).execute()
+                        
+                        # Manejar respuesta vacía o lista
+                        if hasattr(update_result, 'data') and update_result.data:
+                            logger.info(f"Update resultado: {json.dumps(update_result.data, ensure_ascii=False)}")
+                        else:
+                            logger.info("Update ejecutado, verificando cambios...")
+                        
+                        # Verificar cambios reales
+                        updated_data = auth_client.table(table).select('*').eq(ref_field, ref_value).single().execute()
+                        if updated_data.data:
+                            logger.info(f"Datos después de update: {json.dumps(updated_data.data, ensure_ascii=False)}")
+                            return {"success": True, "data": updated_data.data}, 200
+                        else:
+                            logger.error("No se pudieron recuperar los datos actualizados")
+                            return {"success": False, "error": "Error al recuperar datos actualizados"}, 500
+                        
+                        # Validar que cambió
+                        if updated_data.data and updated_data.data[0] != current_data.data[0]:
+                            logger.info("✅ CAMBIOS APLICADOS CORRECTAMENTE")
+                        else:
+                            logger.error("❌ NO HUBO CAMBIOS - VERIFICAR RLS POLICY")
+                            # Intentar con upsert como fallback
+                            upsert_result = auth_client.table(table).upsert({
+                                **update_data,
+                                'usuario_id': user_uuid
+                            }).execute()
+                            logger.info(f"UPSERT RESULTADO: {json.dumps(upsert_result.data, ensure_ascii=False)}")
+                
+                else:
+                    auth_client.table(table).update(update_data).eq(ref_field, ref_value).execute()
+                    updated_data = auth_client.table(table).select('*').eq(ref_field, ref_value).single().execute()
+                
+                logger.info(f"=== DEBUG FIN {table} ===")
+                return {
+                    "success": True,
+                    "message": f"{table} actualizado correctamente",
+                    "data": updated_data.data
+                }, 200
+                        
+            except Exception as e:
+                logger.error(f"=== ERROR CRÍTICO {table} ===")
+                logger.error(f"Error: {str(e)}")
+                logger.error(f"Tipo: {type(e)}")
+                return {"success": False, "error": f"Error al actualizar: {str(e)}"}, 500
             
             # Obtener datos actualizados
             updated_data = auth_client.table(table).select('*').eq(ref_field, ref_value).single().execute()

@@ -121,6 +121,26 @@ def get_usuario_data():
         logger.error(f"Error obteniendo datos de usuario: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
+@edit_bp.route('/api/data/info_contacto', methods=['GET'])
+def get_info_contacto_data():
+    """Obtener datos de info_contacto del usuario autenticado"""
+    try:
+        user_uuid = g.user.get('user_uuid')
+        if not user_uuid:
+            return jsonify({"success": False, "error": "Usuario no encontrado"}), 404
+        
+        # Obtener información de contacto
+        info_contacto = db_modifier.get_record('info_contacto', user_uuid)
+        
+        return jsonify({
+            "success": True,
+            "data": info_contacto or {}
+        })
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo datos de info_contacto: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @edit_bp.route('/api/edit/info_contacto', methods=['POST'])
 def edit_info_contacto():
     """Editar información de contacto del usuario usando el módulo modify_DB"""
@@ -134,7 +154,7 @@ def edit_info_contacto():
             return jsonify({"success": False, "error": "Usuario no encontrado"}), 404
         
         # Definir campos válidos para información de contacto
-        valid_fields = ['correo_principal', 'telefono_principal', 'correo_secundario']
+        valid_fields = ['nombre_completo', 'nombre_empresa', 'correo_principal', 'telefono_principal', 'correo_secundario', 'telefono_secundario', 'direccion', 'comuna', 'region', 'pais']
         filtered_data = {k: v for k, v in data.items() if k in valid_fields}
         
         if not filtered_data:
@@ -142,6 +162,10 @@ def edit_info_contacto():
         
         # Usar el módulo modify_DB para actualizar
         result, status_code = db_modifier.update_record('info_contacto', filtered_data, user_uuid)
+        
+        # Agregar URL de perfil al resultado (igual que usuarios)
+        if result.get('success', False):
+            result['profile_url'] = f"/profile/{user_uuid}"
         
         return jsonify(result), status_code
         
