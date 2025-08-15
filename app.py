@@ -195,24 +195,18 @@ Accede a: {request.url_root.rstrip('/')}/
     print(welcome_msg)
 
 def init_google_oauth_flow(is_api=False):
-    """Inicializa el flujo de autenticación con Google OAuth."""
+    """Inicializa el flujo de autenticación con Google OAuth usando detección universal."""
     try:
         current_app.logger.info(f"Iniciando init_google_oauth_flow - is_api: {is_api}")
         
-        # Detectar URL base automáticamente
-        if request.headers.get('X-Forwarded-Proto'):
-            # Estamos en producción (Vercel)
-            base_url = f"{request.headers.get('X-Forwarded-Proto')}://{request.headers.get('Host')}"
-        elif 'vercel.app' in request.host or 'meli-app-v3' in request.host:
-            # Forzar URL de producción si estamos en Vercel
-            base_url = "https://meli-app-v3.vercel.app"
-        else:
-            # Estamos en desarrollo local
-            base_url = request.url_root.rstrip('/')
+        # Método universal para detectar URL base usando headers de proxy
+        scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
+        host = request.headers.get('X-Forwarded-Host', request.host)
+        
+        base_url = f"{scheme}://{host}"
+        redirect_uri = f"{base_url}/auth/callback"
         
         current_app.logger.info(f"URL base detectada: {base_url}")
-        
-        redirect_uri = f"{base_url}/auth/callback"
         current_app.logger.info(f"URL de redirección: {redirect_uri}")
         
         # Usar el cliente de Supabase para generar la URL de autorización
