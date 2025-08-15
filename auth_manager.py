@@ -268,6 +268,23 @@ class AuthManager:
             }
     
     @staticmethod
+    def _get_base_url():
+        """
+        Obtiene la URL base dinámica según el entorno.
+        
+        Returns:
+            str: URL base completa
+        """
+        # Detectar si estamos en producción (Vercel)
+        if request.environ.get('HTTP_X_FORWARDED_HOST'):
+            protocol = request.environ.get('HTTP_X_FORWARDED_PROTO', 'https')
+            host = request.environ.get('HTTP_X_FORWARDED_HOST')
+            return f"{protocol}://{host}"
+        else:
+            # Desarrollo local
+            return request.url_root.rstrip('/')
+
+    @staticmethod
     def init_google_auth():
         """
         Inicia el flujo de autenticación con Google OAuth según MCP.
@@ -276,8 +293,7 @@ class AuthManager:
             dict: URL de redirección para Google OAuth
         """
         try:
-            # Usar URL base dinámica en lugar de localhost
-            base_url = request.environ.get('HTTP_X_FORWARDED_PROTO', request.scheme) + '://' + request.environ.get('HTTP_X_FORWARDED_HOST', request.host)
+            base_url = AuthManager._get_base_url()
             redirect_uri = f"{base_url}/auth/callback"
             
             auth_response = db.client.auth.sign_in_with_oauth({
@@ -318,8 +334,7 @@ class AuthManager:
             dict: Respuesta JSON con la URL de redirección
         """
         try:
-            # Usar URL base dinámica en lugar de localhost
-            base_url = request.environ.get('HTTP_X_FORWARDED_PROTO', request.scheme) + '://' + request.environ.get('HTTP_X_FORWARDED_HOST', request.host)
+            base_url = AuthManager._get_base_url()
             redirect_uri = f"{base_url}/auth/callback"
             
             # Obtener la URL de redirección para Google OAuth
