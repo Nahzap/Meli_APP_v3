@@ -406,7 +406,10 @@ class AuthManager:
             # INTERCAMBIAR CÓDIGO POR SESIÓN
             current_app.logger.info("Intercambiando código por sesión...")
             try:
-                response = db.client.auth.exchange_code_for_session(code)
+                # Usar el método correcto para intercambiar código
+                response = db.client.auth.exchange_code_for_session({
+                    'auth_code': code
+                })
                 current_app.logger.info(f"Respuesta de exchange_code_for_session: {response}")
                 
                 if not response or not hasattr(response, 'user') or not response.user:
