@@ -13,9 +13,6 @@
                         <h1 class="text-2xl font-bold text-gray-900">🍯 Editar Información Personal</h1>
                         <p class="text-sm text-gray-600 mt-1">Actualiza tus datos personales de forma segura</p>
                     </div>
-                    <a href="/profile" class="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors">
-                        <i class="fas fa-arrow-left mr-2"></i>Volver al Perfil
-                    </a>
                 </div>
             </div>
         </div>
@@ -214,18 +211,48 @@
                         </div>
                     </div>
                     
-                    <form onsubmit="submitForm(event, 'ubicaciones')" class="space-y-6">
-                        <!-- Ubicación -->
+                    <form onsubmit="submitUbicacionForm(event)" class="space-y-6">
+                        <!-- Plus Code Input -->
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Nueva Ubicación *</label>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Plus Code de Google Maps *</label>
                             <input type="text" 
-                                   name="ubicacion" 
-                                   id="ubicaciones-ubicacion" 
+                                   name="gmaps_plus_code"
+                                   id="gmaps-plus-code"
                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                                   placeholder="CVV6+HJ7 Pichipehuenco, Lonquimay"
+                                   placeholder="6RXC+Q7C Colluqueo, Lonquimay"
                                    required>
-                            <p class="text-xs text-gray-500 mt-1">Solo PLUS CODE de Google Maps</p>
+                            <p class="text-xs text-gray-500 mt-1">Pega el código plus de Google Maps → Compartir → Copiar código plus</p>
                         </div>
+                        
+                        <!-- Nombre de la ubicación -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Nombre de la ubicación *</label>
+                            <input type="text" 
+                                   name="nombre" 
+                                   id="ubicaciones-nombre" 
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                                   placeholder="Colmenar Principal - Colluqueo, Lonquimay"
+                                   required>
+                        </div>
+                        
+                        <!-- Latitud (oculto) -->
+                        <input type="hidden" name="latitud" id="ubicaciones-latitud">
+                        
+                        <!-- Longitud (oculto) -->
+                        <input type="hidden" name="longitud" id="ubicaciones-longitud">
+                        
+                        <!-- Descripción -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Descripción</label>
+                            <textarea name="descripcion" 
+                                      id="ubicaciones-descripcion" 
+                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                                      placeholder="Descripción adicional de la ubicación"
+                                      rows="3"></textarea>
+                        </div>
+                        
+                        <!-- Norma Geo (oculto) -->
+                        <input type="hidden" name="norma_geo" value="WGS84">
                         
                         <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-medium py-3 px-4 rounded-lg transition-colors">
                             <i class="fas fa-map-marker-alt mr-2"></i>Actualizar Ubicación
@@ -284,6 +311,11 @@ async function loadTabData(tabName) {
         if (result.success && result.data) {
             const data = result.data;
             
+            // Store user ID globally for profile navigation
+            if (tabName === 'usuarios' && data.id) {
+                window.currentUserId = data.id || data.auth_user_id;
+            }
+            
             // Populate form fields based on tab
             if (tabName === 'usuarios') {
                 if (data.username) document.getElementById('usuarios-username').value = data.username;
@@ -317,18 +349,14 @@ async function submitForm(event, tableName) {
     
     const form = event.target;
     const formData = new FormData(form);
-    const data = Object.fromEntries(formData.entries());
+    const data = {};
     
-    // Remove empty values
-    Object.keys(data).forEach(key => {
-        if (data[key] === '') {
-            delete data[key];
-        }
-    });
+    // Convert FormData to object
+    for (let [key, value] of formData.entries()) {
+        data[key] = value;
+    }
     
     try {
-        showToast('Guardando...', 'info');
-        
         const response = await fetch(`/api/edit/${tableName}`, {
             method: 'POST',
             headers: {
@@ -340,19 +368,71 @@ async function submitForm(event, tableName) {
         const result = await response.json();
         
         if (result.success) {
-            showToast(result.message || 'Datos guardados correctamente', 'success');
+            showToast('success', `${tableName.charAt(0).toUpperCase() + tableName.slice(1)} actualizado exitosamente`);
+            
+            // Redirigir al perfil después de 2 segundos
             setTimeout(() => {
-                // Redirigir al perfil del usuario actual usando la URL del backend
-                const profileUrl = result.profile_url || '/profile/{{ session.get("user_uuid", "") }}';
-                window.location.href = profileUrl;
+                // Usar el ID del usuario desde la respuesta de éxito
+                const userId = result.data.id || result.data.auth_user_id;
+                window.location.href = `/profile/${userId}`;
             }, 2000);
         } else {
-            showToast(result.error || 'Error al guardar datos', 'error');
+            showToast('error', result.error || 'Error al actualizar');
         }
     } catch (error) {
         console.error('Error:', error);
-        showToast('Error al conectar con el servidor', 'error');
+        showToast('error', 'Error al procesar la solicitud');
     }
+}
+
+// Función para enviar formulario de ubicaciones
+async function submitUbicacionForm(event) {
+    event.preventDefault();
+    
+    const form = document.getElementById('ubicacion-form');
+    const formData = new FormData(form);
+    
+    // Convertir FormData a objeto
+    const data = {};
+    formData.forEach((value, key) => {
+        data[key] = value;
+    });
+    
+    // Limpiar Plus Code (remover texto adicional)
+    if (data.gmaps_plus_code) {
+        // Extraer solo el Plus Code (ej: "6RXC+Q7C" de "6RXC+Q7C Colluqueo")
+        const plusCodeMatch = data.gmaps_plus_code.match(/([23456789CFGHJMPQRVWX]{8,}[+]?[23456789CFGHJMPQRVWX]{2,})/i);
+        if (plusCodeMatch) {
+            data.gmaps_plus_code = plusCodeMatch[1].toUpperCase();
+        }
+    }
+    
+    console.log(' Enviando datos:', data);
+    
+    // Enviar al backend
+    fetch('/api/edit/ubicaciones', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        console.log(' Respuesta:', result);
+        if (result.success) {
+            showToast('Ubicación guardada exitosamente', 'success');
+            // Recargar datos después de guardar
+            loadTabData('ubicaciones');
+            form.reset();
+        } else {
+            showToast('Error: ' + result.error, 'error');
+        }
+    })
+    .catch(error => {
+        console.error(' Error:', error);
+        showToast('Error al guardar ubicación', 'error');
+    });
 }
 
 // Toast notifications
@@ -361,6 +441,40 @@ function showToast(message, type = 'info') {
     const icon = document.getElementById('toast-icon');
     const messageEl = document.getElementById('toast-message');
     
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Show first tab by default
+        showTab('usuarios');
+        
+        // Botón usando UUID real del usuario (pasado desde Flask)
+        const backButton = document.getElementById('backToProfile');
+        if (backButton) {
+            backButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Usar el user_id pasado desde Flask
+                const userId = '{{ user_id }}';
+                if (userId && userId !== 'None') {
+                    window.location.href = `/profile/${userId}`;
+                } else {
+                    // Fallback a obtener desde el backend si no está disponible
+                    fetch('/api/user/current')
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.user_id) {
+                                window.location.href = `/profile/${data.user_id}`;
+                            } else {
+                                window.location.href = '/';
+                            }
+                        })
+                        .catch(() => {
+                            window.location.href = '/';
+                        });
+                }
+            });
+        }
+    });
+
     // Set icon and colors based on type
     if (type === 'success') {
         icon.innerHTML = '<i class="fas fa-check-circle text-green-500"></i>';
@@ -384,10 +498,30 @@ function showToast(message, type = 'info') {
     }, 5000);
 }
 
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', function() {
-    // Show first tab by default
-    showTab('usuarios');
-});
+// Navigate to profile page
+function goToProfile() {
+    fetch('/api/data/usuarios')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.data) {
+                const userId = data.data.id || data.data.auth_user_id;
+                window.location.href = `/profile/${userId}`;
+            } else {
+                window.location.href = '/profile';
+            }
+        })
+        .catch(() => {
+            window.location.href = '/profile';
+        });
+}
+
+// Navigate to profile using already loaded user ID
+function goToProfile() {
+    if (window.currentUserId) {
+        window.location.href = `/profile/${window.currentUserId}`;
+    } else {
+        window.location.href = '/profile';
+    }
+}
 </script>
 {% endblock %}

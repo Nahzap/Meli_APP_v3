@@ -4,11 +4,13 @@ Permite actualizar cualquier tabla/campo desde formularios JSON con manejo de RL
 """
 
 from flask import jsonify, g, session
-import json
-from supabase import create_client
 import logging
-from datetime import datetime
+from supabase import create_client
+from typing import Dict, Any, Optional, Tuple
 import os
+import json
+from auth_manager import AuthManager
+from gmaps_utils import process_ubicacion_data
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +178,7 @@ class DatabaseModifier:
                 logger.info(f"=== DEBUG INICIO {table} ===")
                 logger.info(f"Usuario UUID: {user_uuid}")
                 logger.info(f"Campo ref: {ref_field} = {ref_value}")
-                logger.info(f"Datos update: {json.dumps(update_data, ensure_ascii=False)}")
+                logger.info(f"Datos FINALES después de procesamiento: {json.dumps(update_data, ensure_ascii=False)}")
                 
                 if table == 'info_contacto':
                     # PASO CRÍTICO: Verificar que el usuario autenticado es el dueño
@@ -185,6 +187,34 @@ class DatabaseModifier:
                     # Paso 1: Verificar datos actuales
                     current_data = auth_client.table(table).select('*').eq(ref_field, ref_value).execute()
                     logger.info(f"Datos actuales: {json.dumps(current_data.data, ensure_ascii=False)}")
+                    
+                    # Mapeo de campos por tabla
+                    field_mapping = {
+                        'usuarios': {
+                            'nombre': 'nombre',
+                            'apellido': 'apellido',
+                            'email': 'email',
+                            'telefono': 'telefono',
+                            'nombre_empresa': 'nombre_empresa',
+                            'rut': 'rut'
+                        },
+                        'info_contacto': {
+                            'nombre_completo': 'nombre_completo',
+                            'correo_principal': 'correo_principal',
+                            'telefono_principal': 'telefono_principal',
+                            'direccion': 'direccion',
+                            'comuna': 'comuna',
+                            'region': 'region',
+                            'nombre_empresa': 'nombre_empresa'
+                        },
+                        'ubicaciones': {
+                            'nombre': 'nombre',
+                            'latitud': 'latitud',
+                            'longitud': 'longitud',
+                            'norma_geo': 'norma_geo',
+                            'descripcion': 'descripcion'
+                        }
+                    }
                     
                     if not current_data.data or len(current_data.data) == 0:
                         logger.warning("Registro NO existe - CREANDO")
@@ -310,23 +340,33 @@ class DatabaseModifier:
         try:
             auth_client = self.get_authenticated_client()
             if not auth_client:
-                return None
+                return []
             
-            # Determinar campo de referencia según la tabla
-            if table == 'usuarios':
-                ref_field = 'id'
-                ref_value = user_uuid
-            else:
-                ref_field = 'usuario_id'
-                ref_value = user_uuid
+            ref_field = 'usuario_id' if table != 'usuarios' else 'id'
+            response = auth_client.table(table).select('*').eq(ref_field, user_uuid).execute()
             
-            result = auth_client.table(table).select(select_fields).eq(ref_field, ref_value).single().execute()
-            return result.data if result.data else None
+            return response.data if response.data else []
             
         except Exception as e:
-            logger.error(f"Error obteniendo registro de {table}: {e}")
-            return None
+            logger.error(f"Error obteniendo registros {table}: {e}")
+            return []
     
+    def get_records(self, table, user_uuid, select_fields='*'):
+        """Obtener múltiples registros del usuario"""
+        try:
+            auth_client = self.get_authenticated_client()
+            if not auth_client:
+                return []
+            
+            ref_field = 'usuario_id' if table != 'usuarios' else 'id'
+            response = auth_client.table(table).select('*').eq(ref_field, user_uuid).execute()
+            
+            return response.data if response.data else []
+            
+        except Exception as e:
+            logger.error(f"Error obteniendo registros {table}: {e}")
+            return []
+
     def delete_record(self, table, user_uuid, extra_conditions=None):
         """Eliminar un registro de cualquier tabla"""
         try:
@@ -374,6 +414,15 @@ def update_user_data(data, user_uuid):
     allowed_fields = {'username', 'tipo_usuario', 'role', 'empresa', 'status'}
     filtered_data = {k: v for k, v in data.items() if k in allowed_fields}
     
+    # Truncar automáticamente el campo role a 30 caracteres
+    if 'role' in filtered_data and filtered_data['role']:
+        original_role = str(filtered_data['role'])
+        truncated_role = original_role[:30]
+        logger.info(f"=== TRUNCAMIENTO ROLE ===")
+        logger.info(f"Original: '{original_role}' ({len(original_role)} chars)")
+        logger.info(f"Truncado: '{truncated_role}' ({len(truncated_role)} chars)")
+        filtered_data['role'] = truncated_role
+    
     field_mappings = {
         'username': {'unique': True},
         'tipo_usuario': {},
@@ -383,9 +432,9 @@ def update_user_data(data, user_uuid):
     }
     
     validation_rules = {
-        'username': {'min_length': 2, 'max_length': 80},
-        'tipo_usuario': {'max_length': 50},
-        'role': {'max_length': 50},
+        'username': {'min_length': 8, 'max_length': 100},
+        'tipo_usuario': {'max_length': 100},
+        'role': {'max_length': 100},
         'empresa': {'max_length': 100}
     }
     

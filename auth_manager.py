@@ -10,8 +10,13 @@ Este módulo maneja todo lo relacionado con:
 """
 
 import logging
+import secrets
+import hashlib
+import base64
 from functools import wraps
-from flask import session, redirect, url_for, jsonify, request, g
+from flask import session, request, redirect, url_for, flash, g, jsonify
+import uuid
+from datetime import datetime
 from supabase_client import db
 
 logger = logging.getLogger(__name__)
@@ -265,10 +270,51 @@ class AuthManager:
     @staticmethod
     def init_google_auth():
         """
-        Inicia el flujo de autenticación con Google OAuth.
+        Inicia el flujo de autenticación con Google OAuth según MCP.
         
         Returns:
             dict: URL de redirección para Google OAuth
+        """
+        try:
+            # Usar el método correcto de Supabase Auth para OAuth
+            redirect_uri = f"{request.url_root}auth/callback"
+            
+            auth_response = db.client.auth.sign_in_with_oauth({
+                "provider": "google",
+                "options": {
+                    "redirect_to": redirect_uri,
+                    "scopes": "email profile openid",
+                    "skip_browser_redirect": False
+                }
+            })
+            
+            if auth_response.url:
+                return {
+                    "success": True,
+                    "url": auth_response.url
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "Error al generar URL de Google",
+                    "status_code": 500
+                }
+                
+        except Exception as e:
+            logger.error(f"Error en Google auth: {str(e)}")
+            return {
+                "success": False,
+                "error": "Error al conectar con Google",
+                "status_code": 500
+            }
+
+    @staticmethod
+    def api_google_auth():
+        """
+        API endpoint para iniciar el flujo de autenticación con Google OAuth.
+        
+        Returns:
+            dict: Respuesta JSON con la URL de redirección
         """
         try:
             # Obtener la URL de redirección para Google OAuth
@@ -292,7 +338,7 @@ class AuthManager:
                 }
                 
         except Exception as e:
-            logger.error(f"Error en Google auth: {str(e)}")
+            logger.error(f"Error en Google auth API: {str(e)}")
             return {
                 "success": False,
                 "error": "Error al conectar con Google",
@@ -311,17 +357,33 @@ class AuthManager:
             dict: Resultado del proceso de autenticación
         """
         try:
+            logger.info(f"Procesando callback - código: {code}")
+            
+            # Si no hay código, el token está en la sesión de Supabase
             if not code:
+                logger.warning("No se recibió código, verificando sesión activa")
+            
+            # Obtener usuario actual desde Supabase Auth
+            try:
+                user_response = db.client.auth.get_user()
+                
+                if user_response and user_response.user:
+                    user = user_response.user
+                    logger.info(f"Usuario autenticado: {user.email}")
+                else:
+                    logger.error("No hay usuario autenticado")
+                    return {
+                        "success": False,
+                        "redirect_url": "/register"
+                    }
+                    
+            except Exception as e:
+                logger.error(f"Error al obtener usuario: {e}")
                 return {
                     "success": False,
                     "redirect_url": "/register"
                 }
-            
-            # Intercambiar código por sesión
-            auth_response = db.client.auth.exchange_code_for_session(code)
-            
-            if auth_response.user:
-                user = auth_response.user
+                logger.info(f"Usuario autenticado: {user.email}")
                 
                 # Verificar si ya existe en info_contacto
                 contact_response = db.client.table('info_contacto')\
@@ -331,39 +393,28 @@ class AuthManager:
                 
                 if not contact_response.data:
                     # Crear entrada en info_contacto
-                    full_name = user.user_metadata.get('full_name', '')
-                    company = user.user_metadata.get('company', '')
+                    contact_data = {
+                        'usuario_id': str(user.id),
+                        'nombre': user.user_metadata.get('full_name', ''),
+                        'email': user.email,
+                        'telefono': user.user_metadata.get('phone', ''),
+                        'created_at': datetime.utcnow().isoformat()
+                    }
                     
-                    db.client.table('info_contacto').insert({
-                        "usuario_id": str(user.id),
-                        "nombre_completo": full_name or user.email,
-                        "nombre_empresa": company,
-                        "correo_principal": user.email
-                    }).execute()
+                    db.client.table('info_contacto').insert(contact_data).execute()
+                    logger.info(f"Nuevo usuario registrado: {user.email}")
                 
-                # Crear sesión
+                # Guardar en sesión de Flask
                 session['user_id'] = str(user.id)
-                session['user_email'] = user.email
+                session['email'] = user.email
                 session['user_name'] = user.user_metadata.get('full_name', user.email)
-                session['user_empresa'] = user.user_metadata.get('company', '')
-                
-                # Almacenar tokens JWT para RLS
-                try:
-                    session_data = auth_response.session
-                    if session_data:
-                        session['access_token'] = session_data.access_token
-                        session['refresh_token'] = session_data.refresh_token
-                        logger.info(f"JWT tokens stored from Google OAuth for user: {user.email}")
-                    else:
-                        logger.error("No session data in Google OAuth response")
-                except Exception as e:
-                    logger.error(f"Error almacenando tokens JWT de Google: {str(e)}")
                 
                 return {
                     "success": True,
                     "redirect_url": "/"
                 }
             else:
+                logger.error("No se pudo obtener el usuario de Supabase")
                 return {
                     "success": False,
                     "redirect_url": "/register"
@@ -374,6 +425,33 @@ class AuthManager:
             return {
                 "success": False,
                 "redirect_url": "/register"
+            }
+    
+    @staticmethod
+    def api_register(data):
+        """
+        API endpoint para registro manual de usuarios.
+        
+        Args:
+            data: Diccionario con los datos del usuario
+            
+        Returns:
+            dict: Resultado del registro
+        """
+        try:
+            email = data.get('email')
+            password = data.get('password')
+            full_name = data.get('nombre')
+            company = data.get('telefono', '')
+            
+            return AuthManager.register_user(email, password, full_name, company)
+            
+        except Exception as e:
+            logger.error(f"Error en registro API: {str(e)}")
+            return {
+                "success": False,
+                "error": "Error al procesar el registro",
+                "status_code": 500
             }
     
     @staticmethod

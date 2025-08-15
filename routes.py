@@ -347,6 +347,41 @@ def api_session():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
+@api_bp.route('/user/current', methods=['GET'])
+def get_current_user():
+    """
+    Obtiene el ID del usuario actual usando la misma lógica que searcher.get_user_id_by_auth_id.
+    
+    GET /api/user/current
+    """
+    try:
+        # Verificar si hay usuario autenticado
+        if 'user_id' not in session:
+            return jsonify({"success": False, "error": "Usuario no autenticado"}), 401
+            
+        # Obtener el ID del usuario actual desde la sesión
+        current_user_id = session['user_id']
+        
+        # Verificar que el usuario existe
+        user_response = db.client.table('usuarios')\
+            .select('id, username, email')\
+            .eq('id', current_user_id)\
+            .single()\
+            .execute()
+            
+        if not user_response.data:
+            return jsonify({"success": False, "error": "Usuario no encontrado"}), 404
+            
+        return jsonify({
+            "success": True,
+            "user_id": current_user_id,
+            "user": user_response.data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error al obtener usuario actual: {str(e)}")
+        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
 @api_bp.route('/auth/logout', methods=['POST'])
 def api_logout():
     """
@@ -533,12 +568,27 @@ def api_login():
 @web_bp.route('/logout')
 def logout():
     """
-    Cierra la sesión del usuario actual.
-    
-    GET /logout - Cierra sesión y redirige al login
+    Cierra la sesión del usuario actual
     """
-    session.clear()
-    return redirect(url_for('web.login'))
+    result = auth_manager.logout_user()
+    if result['success']:
+        return redirect(result['redirect_url'])
+    else:
+        return redirect('/login')
+
+@web_bp.route('/debug/oauth')
+def debug_oauth():
+    """Endpoint de debug para verificar configuración OAuth."""
+    from flask import request
+    
+    debug_info = {
+        "request_url_root": request.url_root,
+        "callback_url": f"{request.url_root}auth/callback",
+        "current_route": request.url,
+        "headers": dict(request.headers)
+    }
+    
+    return jsonify(debug_info)
 
 @web_bp.route('/register', methods=['GET', 'POST'])
 def register():
@@ -784,26 +834,135 @@ def sugerir():
 # Rutas de autenticación OAuth
 # ====================
 
-@web_bp.route('/api/auth/google', methods=['POST'])
+@web_bp.route('/api/auth/google', methods=['GET'])
 def api_google_auth():
     """
     API endpoint para iniciar el flujo de autenticación con Google.
     """
-    return auth_manager.api_google_auth()
+    try:
+        result = auth_manager.api_google_auth()
+        if result.get('success'):
+            return redirect(result.get('url'))
+        else:
+            return redirect('/register')
+    except Exception as e:
+        logger.error(f"Error en Google auth redirect: {str(e)}")
+        return redirect('/register')
 
 @web_bp.route('/auth/callback')
 def auth_callback():
     """
-    Callback para manejar el retorno de Google OAuth.
+    Callback de Google OAuth - maneja tanto código como tokens en fragmentos
     """
-    return auth_manager.auth_callback()
+    code = request.args.get('code')
+    
+    # Si hay un código, procesarlo directamente
+    if code:
+        result = auth_manager.handle_google_callback(code)
+        if result['success']:
+            return redirect(result['redirect_url'])
+        else:
+            return redirect(result['redirect_url'])
+    
+    # Si no hay código, redirigir a la página que maneja tokens en fragmentos
+    return render_template('auth/oauth-callback.html')
+
+@web_bp.route('/auth/callback-js', methods=['POST'])
+def auth_callback_js():
+    """
+    Endpoint para manejar tokens OAuth desde JavaScript
+    """
+    try:
+        data = request.get_json()
+        access_token = data.get('access_token')
+        refresh_token = data.get('refresh_token')
+        
+        if not access_token:
+            return jsonify({
+                "success": False,
+                "redirect_url": "/register"
+            })
+        
+        # Establecer la sesión con el token recibido
+        try:
+            # Usar set_session para establecer el token en Supabase
+            db.client.auth.set_session(access_token, refresh_token)
+            
+            # Obtener el usuario actual
+            user_response = db.client.auth.get_user()
+            
+            if user_response and user_response.user:
+                user = user_response.user
+                logger.info(f"Usuario autenticado vía JS: {user.email}")
+                
+                # Verificar/registrar en info_contacto
+                contact_response = db.client.table('info_contacto')\
+                    .select('id')\
+                    .eq('usuario_id', str(user.id))\
+                    .execute()
+                
+                if not contact_response.data:
+                    contact_data = {
+                        'usuario_id': str(user.id),
+                        'nombre': user.user_metadata.get('full_name', ''),
+                        'email': user.email,
+                        'telefono': user.user_metadata.get('phone', ''),
+                        'created_at': datetime.utcnow().isoformat()
+                    }
+                    db.client.table('info_contacto').insert(contact_data).execute()
+                
+                # Guardar en sesión de Flask
+                session['user_id'] = str(user.id)
+                session['email'] = user.email
+                session['user_name'] = user.user_metadata.get('full_name', user.email)
+                session['access_token'] = access_token
+                if refresh_token:
+                    session['refresh_token'] = refresh_token
+                
+                return jsonify({
+                    "success": True,
+                    "redirect_url": "/"
+                })
+            else:
+                return jsonify({
+                    "success": False,
+                    "redirect_url": "/register"
+                })
+                
+        except Exception as e:
+            logger.error(f"Error al establecer sesión: {e}")
+            return jsonify({
+                "success": False,
+                "redirect_url": "/register"
+            })
+            
+    except Exception as e:
+        logger.error(f"Error en callback JS: {e}")
+        return jsonify({
+            "success": False,
+            "redirect_url": "/register"
+        }), 500
 
 @web_bp.route('/api/register', methods=['POST'])
 def api_register():
     """
     API endpoint para registro manual de usuarios.
     """
-    return auth_manager.api_register()
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "error": "JSON requerido"}), 400
+            
+        result = auth_manager.api_register(data)
+        
+        if result.get('success'):
+            return jsonify(result)
+        else:
+            return jsonify(result), result.get('status_code', 400)
+            
+    except Exception as e:
+        logger.error(f"Error en registro API: {str(e)}")
+        return jsonify({"success": False, "error": "Error al procesar el registro"}), 500
 
 @web_bp.route('/edit-profile')
 @auth_manager.login_required
@@ -812,4 +971,6 @@ def edit_profile():
     Página de edición de perfil para usuarios autenticados.
     Solo accesible si el usuario está logueado.
     """
-    return render_template('pages/edit_profile.html')
+    # Obtener el ID del usuario actual desde la sesión
+    current_user_id = session.get('user_id')
+    return render_template('pages/edit_profile.html', user_id=current_user_id)
