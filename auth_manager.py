@@ -439,16 +439,17 @@ class AuthManager:
                 
                 # Verificar/crear usuario en base de datos
                 try:
-                    existing_user = db.client.table('usuarios').select('*').eq('email', user.email).execute()
+                    existing_user = db.client.table('usuarios').select('*').eq('username', user.email).execute()
                     
                     if not existing_user.data:
                         # Crear nuevo usuario
                         new_user = {
-                            'email': user.email,
-                            'nombre': user.user_metadata.get('full_name', user.email),
-                            'google_id': user.id,
-                            'avatar_url': user.user_metadata.get('avatar_url', ''),
-                            'fecha_registro': datetime.now().isoformat()
+                            'username': user.email,  # Usar email como username
+                            'auth_user_id': user.id,
+                            'tipo_usuario': 'apicultor',  # Valor por defecto
+                            'role': 'Apicultor',
+                            'status': 'active',
+                            'activo': True
                         }
                         db.client.table('usuarios').insert(new_user).execute()
                         current_app.logger.info(f"Nuevo usuario creado: {user.email}")
