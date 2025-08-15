@@ -190,9 +190,49 @@ http://localhost:{PORT}/profile/550e8400-e29b-41d4-a716-446655440000
 - Autenticación: Supabase Auth
 
 🚀 **SERVIDOR INICIADO**
-Accede a: http://127.0.0.1:{PORT}/
+Accede a: {request.url_root.rstrip('/')}/
 """
     print(welcome_msg)
+
+def init_google_oauth_flow(is_api=False):
+    """Inicializa el flujo de autenticación con Google OAuth."""
+    try:
+        current_app.logger.info(f"Iniciando init_google_oauth_flow - is_api: {is_api}")
+        
+        # Detectar URL base automáticamente
+        if request.headers.get('X-Forwarded-Proto'):
+            # Estamos en producción (Vercel)
+            base_url = f"{request.headers.get('X-Forwarded-Proto')}://{request.headers.get('Host')}"
+        elif 'vercel.app' in request.host or 'meli-app-v3' in request.host:
+            # Forzar URL de producción si estamos en Vercel
+            base_url = "https://meli-app-v3.vercel.app"
+        else:
+            # Estamos en desarrollo local
+            base_url = request.url_root.rstrip('/')
+        
+        current_app.logger.info(f"URL base detectada: {base_url}")
+        
+        redirect_uri = f"{base_url}/auth/callback"
+        current_app.logger.info(f"URL de redirección: {redirect_uri}")
+        
+        # Usar el cliente de Supabase para generar la URL de autorización
+        auth_response = db.auth.sign_in_with_oauth({
+            'provider': 'google',
+            'options': {
+                'redirect_to': redirect_uri,
+                'scopes': 'email profile openid'
+            }
+        })
+        
+        current_app.logger.info("Respuesta de Supabase auth recibida")
+        current_app.logger.info(f"URL generada exitosamente: {auth_response.url}")
+        
+        return auth_response.url
+        
+    except Exception as e:
+        current_app.logger.error(f"Error en init_google_oauth_flow: {str(e)}")
+        current_app.logger.error(traceback.format_exc())
+        return None
 
 def main():
     """Función principal que inicia la aplicación."""
