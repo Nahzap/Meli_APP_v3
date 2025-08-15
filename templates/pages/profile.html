@@ -321,8 +321,8 @@
 // QR Download
 function downloadQR() {
     const link = document.createElement('a');
-    link.href = '{{ qr_url }}';
-    link.download = 'qr-{{ user.nombre.replace(" ", "_").lower() }}.png';
+    link.href = '{{ qr_url or "" }}';
+    link.download = 'qr-{{ (user.nombre or "usuario").replace(" ", "_").lower() if user else "usuario" }}.png';
     link.click();
 }
 
@@ -330,8 +330,8 @@ function downloadQR() {
 function shareProfile() {
     if (navigator.share) {
         navigator.share({
-            title: '{{ user.nombre }} - MeliAPP',
-            text: 'Conoce a {{ user.nombre }} en MeliAPP',
+            title: '{{ (user.nombre or "Usuario") if user else "Usuario" }} - MeliAPP',
+            text: 'Conoce a {{ (user.nombre or "Usuario") if user else "Usuario" }} en MeliAPP',
             url: window.location.href
         });
     } else {

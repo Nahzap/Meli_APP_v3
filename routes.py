@@ -715,7 +715,7 @@ def profile(user_id):
         # Si no se encontró el usuario después de todas las búsquedas
         if not user_info or not user_uuid:
             logger.warning(f"Usuario no encontrado con término: {user_id}")
-            return render_template('pages/profile.html', error="Usuario no encontrado"), 404
+            return render_template('pages/profile.html', user=None, error="Usuario no encontrado"), 404
         
         # Si el término de búsqueda no coincide con el UUID real, redirigir a la URL correcta
         if user_id != user_uuid:
