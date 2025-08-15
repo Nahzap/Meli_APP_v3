@@ -442,22 +442,20 @@ class AuthManager:
                     user_info = db.client.table('usuarios')\
                         .select('id', 'username')\
                         .eq('auth_user_id', user.id)\
-                        .single()\
                         .execute()
                     
-                    if user_info.data:
-                        user_db_id = user_info.data['id']
-                        session['user_name'] = user_info.data['username']
+                    if user_info.data and len(user_info.data) > 0:
+                        user_db_id = user_info.data[0]['id']
+                        session['user_name'] = user_info.data[0]['username']
                         
                         # Obtener información de contacto usando el ID de la tabla usuarios
                         contact_info = db.client.table('info_contacto')\
                             .select('nombre_empresa')\
                             .eq('usuario_id', user_db_id)\
-                            .single()\
                             .execute()
                         
-                        if contact_info.data:
-                            session['user_empresa'] = contact_info.data.get('nombre_empresa', '')
+                        if contact_info.data and len(contact_info.data) > 0:
+                            session['user_empresa'] = contact_info.data[0].get('nombre_empresa', '')
                         else:
                             session['user_empresa'] = ''
                     else:
@@ -469,19 +467,24 @@ class AuthManager:
                     session['user_name'] = user.email
                     session['user_empresa'] = ''
                 
-                # Verificar/crear usuario en base de datos
+                # Verificar/crear usuario en base de datos - lógica simplificada
                 try:
-                    # Buscar usuario existente por auth_user_id primero
-                    existing_user = db.client.table('usuarios').select('*').eq('auth_user_id', user.id).execute()
+                    # Buscar usuario por auth_user_id
+                    user_check = db.client.table('usuarios').select('id').eq('auth_user_id', user.id).execute()
                     
-                    if not existing_user.data:
-                        # Verificar si existe por email/username
-                        existing_by_email = db.client.table('usuarios').select('*').eq('username', user.email).execute()
+                    if user_check.data and len(user_check.data) > 0:
+                        # Usuario ya existe, solo loguear
+                        user_db_id = user_check.data[0]['id']
+                        current_app.logger.info(f"Usuario existente - login directo: {user.email}")
+                    else:
+                        # Buscar por email para ver si existe sin auth_id
+                        email_check = db.client.table('usuarios').select('id').eq('username', user.email).execute()
                         
-                        if existing_by_email.data and len(existing_by_email.data) > 0:
-                            # Actualizar el auth_user_id existente
+                        if email_check.data and len(email_check.data) > 0:
+                            # Actualizar auth_user_id en usuario existente
+                            user_db_id = email_check.data[0]['id']
                             db.client.table('usuarios').update({'auth_user_id': user.id}).eq('username', user.email).execute()
-                            current_app.logger.info(f"Usuario actualizado: {user.email}")
+                            current_app.logger.info(f"Usuario existente actualizado: {user.email}")
                         else:
                             # Crear nuevo usuario
                             new_user = {
@@ -493,31 +496,30 @@ class AuthManager:
                                 'activo': True
                             }
                             insert_result = db.client.table('usuarios').insert(new_user).execute()
+                            user_db_id = insert_result.data[0]['id']
                             current_app.logger.info(f"Nuevo usuario creado: {user.email}")
                             
-                            # Crear registro de contacto vacío para el nuevo usuario
+                            # Crear contacto vacío
                             try:
-                                if insert_result.data and len(insert_result.data) > 0:
-                                    user_db_id = insert_result.data[0]['id']
-                                    db.client.table('info_contacto').insert({
-                                        'usuario_id': user_db_id,
-                                        'nombre_empresa': '',
-                                        'correo_principal': user.email
-                                    }).execute()
+                                db.client.table('info_contacto').insert({
+                                    'usuario_id': user_db_id,
+                                    'nombre_empresa': '',
+                                    'correo_principal': user.email
+                                }).execute()
                             except Exception as e:
                                 current_app.logger.warning(f"Error al crear info_contacto: {str(e)}")
-                    else:
-                        current_app.logger.info(f"Usuario existente: {user.email}")
+                    
+                    # Guardar ID de usuario para redirección
+                    session['user_uuid'] = user_db_id
                     
                     # Obtener el ID del usuario de nuestra tabla
                     user_response = db.client.table('usuarios')\
                         .select('id')\
                         .eq('auth_user_id', user.id)\
-                        .single()\
                         .execute()
                     
-                    if user_response.data:
-                        user_id = user_response.data['id']
+                    if user_response.data and len(user_response.data) > 0:
+                        user_id = user_response.data[0]['id']
                         return {
                             "success": True,
                             "redirect_url": f"/profile/{user_id}",
