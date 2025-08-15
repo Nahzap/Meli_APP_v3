@@ -288,41 +288,35 @@ class AuthManager:
             dict: URL de redirección para Google OAuth
         """
         try:
-            current_app.logger.info(f" Iniciando init_google_oauth_flow - is_api: {is_api}")
+            current_app.logger.info(f"Iniciando init_google_oauth_flow - is_api: {is_api}")
             
+            # Detectar URL base automáticamente desde el entorno o request
             base_url = AuthManager._get_base_url()
-            redirect_uri = f"{base_url}/auth/callback"
+            current_app.logger.info(f"URL base detectada: {base_url}")
             
-            current_app.logger.info(f" URL base detectada: {base_url}")
-            current_app.logger.info(f" URL de redirección: {redirect_uri}")
+            redirect_url = f"{base_url}/auth/callback"
+            current_app.logger.info(f"URL de redirección: {redirect_url}")
             
+            # Configurar el flujo OAuth con Supabase
             auth_response = db.client.auth.sign_in_with_oauth({
-                "provider": "google",
-                "options": {
-                    "redirect_to": redirect_uri,
-                    "scopes": "email profile openid",
-                    "skip_browser_redirect": False
+                'provider': 'google',
+                'options': {
+                    'redirect_to': redirect_url,
+                    'scopes': 'email profile openid'
                 }
             })
             
-            current_app.logger.info(f" Respuesta de Supabase auth recibida")
-            current_app.logger.info(f" auth_response type: {type(auth_response)}")
+            current_app.logger.info("Respuesta de Supabase auth recibida")
             
-            if hasattr(auth_response, 'url'):
-                current_app.logger.info(f" URL generada exitosamente: {auth_response.url}")
-                return {
-                    "success": True,
-                    "url": auth_response.url,
-                    "url_web": auth_response.url if not is_api else None
-                }
+            # Manejar diferentes formatos de respuesta
+            if isinstance(auth_response, dict):
+                url = auth_response.get('url')
+            elif hasattr(auth_response, 'url'):
+                url = auth_response.url
+            elif hasattr(auth_response, 'data') and auth_response.data:
+                url = auth_response.data.get('url')
             else:
-                current_app.logger.error(" auth_response no tiene atributo 'url'")
-                current_app.logger.error(f" auth_response: {auth_response}")
-                return {
-                    "success": False,
-                    "error": "Error al generar URL de Google",
-                    "status_code": 500
-                }
+                url = None
                 
         except Exception as e:
             current_app.logger.error(f" Error en init_google_oauth_flow: {str(e)}")
