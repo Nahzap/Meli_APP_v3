@@ -439,20 +439,31 @@ class AuthManager:
                 
                 # Verificar/crear usuario en base de datos
                 try:
-                    existing_user = db.client.table('usuarios').select('*').eq('username', user.email).execute()
+                    # Buscar usuario existente por auth_user_id primero
+                    existing_user = db.client.table('usuarios').select('*').eq('auth_user_id', user.id).execute()
                     
                     if not existing_user.data:
-                        # Crear nuevo usuario
-                        new_user = {
-                            'username': user.email,  # Usar email como username
-                            'auth_user_id': user.id,
-                            'tipo_usuario': 'apicultor',  # Valor por defecto
-                            'role': 'Apicultor',
-                            'status': 'active',
-                            'activo': True
-                        }
-                        db.client.table('usuarios').insert(new_user).execute()
-                        current_app.logger.info(f"Nuevo usuario creado: {user.email}")
+                        # Verificar si existe por email/username
+                        existing_by_email = db.client.table('usuarios').select('*').eq('username', user.email).execute()
+                        
+                        if existing_by_email.data:
+                            # Actualizar el auth_user_id existente
+                            db.client.table('usuarios').update({'auth_user_id': user.id}).eq('username', user.email).execute()
+                            current_app.logger.info(f"Usuario actualizado: {user.email}")
+                        else:
+                            # Crear nuevo usuario
+                            new_user = {
+                                'username': user.email,
+                                'auth_user_id': user.id,
+                                'tipo_usuario': 'apicultor',
+                                'role': 'Apicultor',
+                                'status': 'active',
+                                'activo': True
+                            }
+                            db.client.table('usuarios').insert(new_user).execute()
+                            current_app.logger.info(f"Nuevo usuario creado: {user.email}")
+                    else:
+                        current_app.logger.info(f"Usuario existente: {user.email}")
                     
                     return {
                         "success": True,
