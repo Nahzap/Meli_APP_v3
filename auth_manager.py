@@ -285,10 +285,13 @@ class AuthManager:
             return request.url_root.rstrip('/')
 
     @staticmethod
-    def init_google_auth():
+    def init_google_oauth_flow(is_api=False):
         """
-        Inicia el flujo de autenticación con Google OAuth según MCP.
+        Método único y unificado para iniciar el flujo de autenticación con Google OAuth.
         
+        Args:
+            is_api (bool): Si es True, retorna formato JSON. Si es False, retorna formato web.
+            
         Returns:
             dict: URL de redirección para Google OAuth
         """
@@ -308,7 +311,8 @@ class AuthManager:
             if auth_response.url:
                 return {
                     "success": True,
-                    "url": auth_response.url
+                    "url": auth_response.url,
+                    "url_web": auth_response.url if not is_api else None
                 }
             else:
                 return {
@@ -326,6 +330,16 @@ class AuthManager:
             }
 
     @staticmethod
+    def init_google_auth():
+        """
+        Inicia el flujo de autenticación con Google OAuth (versión web).
+        
+        Returns:
+            dict: URL de redirección para Google OAuth
+        """
+        return AuthManager.init_google_oauth_flow(is_api=False)
+
+    @staticmethod
     def api_google_auth():
         """
         API endpoint para iniciar el flujo de autenticación con Google OAuth.
@@ -333,37 +347,7 @@ class AuthManager:
         Returns:
             dict: Respuesta JSON con la URL de redirección
         """
-        try:
-            base_url = AuthManager._get_base_url()
-            redirect_uri = f"{base_url}/auth/callback"
-            
-            # Obtener la URL de redirección para Google OAuth
-            auth_response = db.client.auth.sign_in_with_oauth({
-                "provider": "google",
-                "options": {
-                    "redirect_to": redirect_uri
-                }
-            })
-            
-            if auth_response.url:
-                return {
-                    "success": True,
-                    "url": auth_response.url
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": "Error al generar URL de Google",
-                    "status_code": 500
-                }
-                
-        except Exception as e:
-            logger.error(f"Error en Google auth API: {str(e)}")
-            return {
-                "success": False,
-                "error": "Error al conectar con Google",
-                "status_code": 500
-            }
+        return AuthManager.init_google_oauth_flow(is_api=True)
     
     @staticmethod
     def handle_google_callback(code: str):
