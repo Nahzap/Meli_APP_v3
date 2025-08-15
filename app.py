@@ -119,16 +119,29 @@ def get_base_url():
     Función centralizada para obtener la URL base de la aplicación.
     Detecta automáticamente el entorno (desarrollo/producción).
     """
-    # Prioridad 1: Variable de entorno BASE_URL
+    # Prioridad 1: Variable de entorno BASE_URL o VERCEL_URL
     base_url = os.getenv('BASE_URL')
     if base_url:
         return base_url.rstrip('/')
     
-    # Prioridad 2: Detectar desde request (solo cuando hay contexto activo)
+    # Prioridad 2: VERCEL_URL para producción
+    vercel_url = os.getenv('VERCEL_URL')
+    if vercel_url:
+        return f"https://{vercel_url}"
+    
+    # Prioridad 3: NEXT_PUBLIC_SITE_URL
+    site_url = os.getenv('NEXT_PUBLIC_SITE_URL')
+    if site_url:
+        return site_url.rstrip('/')
+    
+    # Prioridad 4: Detectar desde request (solo cuando hay contexto activo)
     try:
         from flask import request
         scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
         host = request.headers.get('X-Forwarded-Host', request.host)
+        # Si es producción, forzar HTTPS
+        if 'vercel.app' in host or 'meli-app' in host:
+            scheme = 'https'
         return f"{scheme}://{host}"
     except RuntimeError:
         # No hay contexto de request, usar localhost por defecto

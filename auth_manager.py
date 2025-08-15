@@ -297,6 +297,16 @@ class AuthManager:
             redirect_url = f"{base_url}/auth/callback"
             current_app.logger.info(f"URL de redirección: {redirect_url}")
             
+            # Verificar que estamos en producción
+            is_production = 'vercel.app' in base_url or 'meli-app' in base_url
+            current_app.logger.info(f"Entorno de producción detectado: {is_production}")
+            
+            if is_production:
+                current_app.logger.info("⚠️ IMPORTANTE: Verificar que las siguientes URLs estén configuradas:")
+                current_app.logger.info(f"   - Supabase Dashboard: {redirect_url}")
+                current_app.logger.info(f"   - Google Cloud Console: https://auth.supabase.co/auth/v1/callback")
+                current_app.logger.info(f"   - Google Cloud Console redirect URI: https://auth.supabase.co/auth/v1/callback")
+            
             # Configurar el flujo OAuth con Supabase
             try:
                 response = db.client.auth.sign_in_with_oauth({
