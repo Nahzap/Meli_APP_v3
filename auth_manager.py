@@ -263,22 +263,20 @@ class AuthManager:
                 "status_code": 500
             }
     
-    @staticmethod
-    def _get_base_url():
+    @classmethod
+    def _get_base_url(cls):
         """
         Obtiene la URL base dinámica según el entorno.
+        Usa la función centralizada get_base_url() de app.py
         
         Returns:
             str: URL base completa
         """
-        # Detectar si estamos en producción (Vercel)
-        if request.environ.get('HTTP_X_FORWARDED_HOST'):
-            protocol = request.environ.get('HTTP_X_FORWARDED_PROTO', 'https')
-            host = request.environ.get('HTTP_X_FORWARDED_HOST')
-            return f"{protocol}://{host}"
-        else:
-            # Desarrollo local
-            return request.url_root.rstrip('/')
+        # Cachear la función para evitar import repetido
+        if not hasattr(cls, '_cached_base_url_func'):
+            from app import get_base_url
+            cls._cached_base_url_func = get_base_url
+        return cls._cached_base_url_func()
     
     @staticmethod
     def init_google_oauth_flow(is_api=False):

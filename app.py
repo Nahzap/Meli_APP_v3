@@ -1,8 +1,11 @@
 import logging
-from flask import Flask
+from flask import Flask, request
 from datetime import datetime
 import os
 from dotenv import load_dotenv
+import sys
+import io
+from supabase_client import db
 
 # Load environment variables
 load_dotenv()
@@ -111,8 +114,29 @@ def list_routes():
     
     return '\n'.join(output)
 
+def get_base_url():
+    """
+    Función centralizada para obtener la URL base de la aplicación.
+    Detecta automáticamente el entorno (desarrollo/producción).
+    """
+    # Prioridad 1: Variable de entorno BASE_URL
+    base_url = os.getenv('BASE_URL')
+    if base_url:
+        return base_url.rstrip('/')
+    
+    # Prioridad 2: Detectar desde request (solo cuando hay contexto activo)
+    try:
+        from flask import request
+        scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
+        host = request.headers.get('X-Forwarded-Host', request.host)
+        return f"{scheme}://{host}"
+    except RuntimeError:
+        # No hay contexto de request, usar localhost por defecto
+        return f"http://127.0.0.1:{PORT}"
+
 def print_welcome_message():
     """Muestra un mensaje de bienvenida completo con información de todos los endpoints."""
+    base_url = get_base_url()
     welcome_msg = f"""
 === 🍯 MELI APP v3.0 - INFORMACIÓN COMPLETA ===
 
@@ -127,34 +151,37 @@ def print_welcome_message():
 [🏠 RUTAS WEB - INTERFAZ DE USUARIO]
 /                            - Página principal (Home)
 /login                       - Formulario de inicio de sesión
-/register                    - Formulario de registro de usuarios
-/logout                      - Cierre de sesión
-/profile/<user_id>           - Perfil de usuario (acepta UUID completo o segmento)
-/buscar                      - Búsqueda de usuarios
-/gestionar-lote              - Gestión de lotes de miel (requiere login)
-/auth/callback               - Callback de autenticación OAuth
+/register                    - Formulario de registro
+/profile/<user_id>           - Perfil de usuario público
+/edit-profile               - Editar perfil (requiere login)
+/search                     - Búsqueda de usuarios
+/buscar                     - Búsqueda avanzada
+/gestionar-lote             - Gestión de lotes de producción
+/auth-test                  - Página de prueba de autenticación
+/logout                     - Cerrar sesión
 
-[🔌 RUTAS API - SERVICIOS REST]
-"""
-    api_routes = [
-        ('/api/test', 'GET', 'Prueba de conexión con Supabase'),
-        ('/api/tables', 'GET', 'Lista todas las tablas disponibles'),
-        ('/api/table/<tabla>', 'GET', 'Datos paginados de cualquier tabla'),
-        ('/api/gestionar-lote', 'POST', 'Crear/actualizar lotes de miel'),
-        ('/api/test-db', 'GET', 'Estado detallado de la base de datos'),
-        ('/api/usuario/<segment>', 'GET', 'Redirige al perfil usando segmento UUID (8 chars)'),
-        ('/api/auth/login', 'POST', 'Login API (devuelve JSON)'),
-        ('/api/auth/register', 'POST', 'Registro API (devuelve JSON)'),
-        ('/api/auth/session', 'GET', 'Verificar estado de sesión'),
-        ('/api/auth/logout', 'POST', 'Cerrar sesión API'),
-    ]
-    
-    welcome_msg += "\n[🔌 RUTAS API - SERVICIOS REST]\n"
-    for route, method, description in api_routes:
-        welcome_msg += f"- `{method} {route}` - {description}\n"
-    
-    welcome_msg += f"""
-[📋 TABLAS DISPONIBLES EN API]
+[🔧 RUTAS DEBUG]
+/debug/oauth               - Página de prueba OAuth
+/debug/info_contacto/<uuid:usuario_uuid> - Ver info de contacto
+/debug/test_update/<uuid:usuario_uuid>   - Prueba de actualización
+
+[📋 RUTAS API]
+/api/tables                - Listar todas las tablas
+/api/table/<table_name>    - Datos de tabla específica
+/api/test                  - Endpoint de prueba
+/api/test-db               - Prueba de conexión DB
+/api/usuario/<uuid>        - Datos de usuario
+/api/usuario/<uuid>/qr     - QR de usuario
+/api/user/current          - Usuario actual
+
+[🔐 RUTAS AUTH API]
+/api/auth/login            - Login API
+/api/auth/register         - Registro API
+/api/auth/logout           - Logout API
+/api/auth/session          - Estado de sesión
+/api/auth/google           - Google OAuth
+
+[📊 TABLAS DISPONIBLES EN API]
 - usuarios
 - info_contacto  
 - ubicaciones
@@ -169,19 +196,6 @@ def print_welcome_message():
 - Mapeo auth_user_id ↔ usuarios.uuid
 - Gestión de sesiones con Flask
 
-[📱 EJEMPLOS DE USO]
-# Buscar usuario por segmento UUID:
-curl http://localhost:{PORT}/api/usuario/550e8400
-
-# Obtener tabla de usuarios:
-curl http://localhost:{PORT}/api/table/usuarios?page=1&per_page=10
-
-# Probar conexión:
-curl http://localhost:{PORT}/api/test
-
-# Acceder al perfil:
-http://localhost:{PORT}/profile/550e8400-e29b-41d4-a716-446655440000
-
 [⚙️ CONFIGURACIÓN]
 - Puerto: {PORT}
 - Debug: {DEBUG}
@@ -190,7 +204,7 @@ http://localhost:{PORT}/profile/550e8400-e29b-41d4-a716-446655440000
 - Autenticación: Supabase Auth
 
 🚀 **SERVIDOR INICIADO**
-Accede a: {request.url_root.rstrip('/')}/
+Accede a: {base_url}
 """
     print(welcome_msg)
 
@@ -199,11 +213,8 @@ def init_google_oauth_flow(is_api=False):
     try:
         current_app.logger.info(f"Iniciando init_google_oauth_flow - is_api: {is_api}")
         
-        # Método universal para detectar URL base usando headers de proxy
-        scheme = request.headers.get('X-Forwarded-Proto', request.scheme)
-        host = request.headers.get('X-Forwarded-Host', request.host)
-        
-        base_url = f"{scheme}://{host}"
+        # Usar función centralizada para obtener URL base
+        base_url = get_base_url()
         redirect_uri = f"{base_url}/auth/callback"
         
         current_app.logger.info(f"URL base detectada: {base_url}")
@@ -232,15 +243,13 @@ def main():
     """Función principal que inicia la aplicación."""
     try:
         # Configurar la codificación de la consola para Windows (solo local)
-        import sys
-        import io
         
+
         # Configurar la salida estándar
         if sys.stdout.encoding != 'utf-8':
             sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
         
         # Verificar la conexión con Supabase al inicio
-        from supabase_client import db
         db.test_connection()
         print("\n[✅] Conexión con Supabase establecida correctamente")
         
@@ -255,7 +264,6 @@ def main():
         print(f"\n🚀 Iniciando servidor en http://127.0.0.1:{PORT}/")
         print("Presiona CTRL+C para salir\n")
         
-        # Iniciar la aplicación sin reloader
         app.run(host='0.0.0.0', port=PORT, debug=DEBUG, use_reloader=False)
         
     except Exception as e:
