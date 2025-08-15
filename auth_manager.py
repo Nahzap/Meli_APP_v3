@@ -392,40 +392,76 @@ class AuthManager:
             dict: Resultado del proceso de autenticación
         """
         try:
-            current_app.logger.info(f" INICIANDO handle_google_callback")
-            current_app.logger.info(f" Código recibido: {code}")
-            current_app.logger.info(f" Tipo de código: {type(code)}")
-            current_app.logger.info(f" Sesión actual: {dict(session)}")
+            current_app.logger.info(f"INICIANDO handle_google_callback")
+            current_app.logger.info(f"Código recibido: {code}")
             
-            # Si no hay código, verificar si hay sesión activa
             if not code:
-                current_app.logger.warning(" No se recibió código, verificando sesión activa")
-                
-                # Verificar si ya hay un usuario autenticado
-                try:
-                    current_user = db.client.auth.get_user()
-                    if current_user and current_user.user:
-                        current_app.logger.info(f" Usuario ya autenticado encontrado: {current_user.user.email}")
-                        return {
-                            "success": True,
-                            "message": "Usuario ya autenticado",
-                            "user": current_user.user
-                        }
-                except Exception as auth_error:
-                    current_app.logger.error(f" Error al verificar sesión activa: {auth_error}")
-            
-            current_app.logger.info(" Obteniendo usuario desde Supabase Auth...")
-            
-            # Obtener usuario actual desde Supabase Auth
-            user = db.client.auth.get_user()
-            
-            if not user:
-                current_app.logger.error(" No se pudo obtener usuario desde Supabase Auth")
-                current_app.logger.error(f" Respuesta de get_user(): {user}")
+                current_app.logger.error("No se proporcionó código de autorización")
                 return {
                     "success": False,
-                    "error": "Usuario no encontrado",
-                    "status_code": 404
+                    "error": "Código de autorización requerido",
+                    "redirect_url": "/register?error=no_code"
+                }
+            
+            # INTERCAMBIAR CÓDIGO POR SESIÓN
+            current_app.logger.info("Intercambiando código por sesión...")
+            try:
+                response = db.client.auth.exchange_code_for_session(code)
+                current_app.logger.info(f"Respuesta de exchange_code_for_session: {response}")
+                
+                if not response or not hasattr(response, 'user') or not response.user:
+                    current_app.logger.error("No se obtuvo usuario válido del intercambio")
+                    return {
+                        "success": False,
+                        "error": "Error en autenticación",
+                        "redirect_url": "/register?error=auth_failed"
+                    }
+                
+                user = response.user
+                current_app.logger.info(f"Usuario autenticado: {user.email}")
+                
+                # Guardar en sesión
+                session['user_id'] = user.id
+                session['user_email'] = user.email
+                
+                # Verificar/crear usuario en base de datos
+                try:
+                    existing_user = db.client.table('usuarios').select('*').eq('email', user.email).execute()
+                    
+                    if not existing_user.data:
+                        # Crear nuevo usuario
+                        new_user = {
+                            'email': user.email,
+                            'nombre': user.user_metadata.get('full_name', user.email),
+                            'google_id': user.id,
+                            'avatar_url': user.user_metadata.get('avatar_url', ''),
+                            'fecha_registro': datetime.now().isoformat()
+                        }
+                        db.client.table('usuarios').insert(new_user).execute()
+                        current_app.logger.info(f"Nuevo usuario creado: {user.email}")
+                    
+                    return {
+                        "success": True,
+                        "redirect_url": "/profile",
+                        "user": user
+                    }
+                    
+                except Exception as db_error:
+                    current_app.logger.error(f"Error en base de datos: {str(db_error)}")
+                    return {
+                        "success": False,
+                        "error": "Error al procesar usuario",
+                        "redirect_url": "/register?error=db_error"
+                    }
+                    
+            except Exception as exchange_error:
+                current_app.logger.error(f"Error en exchange_code_for_session: {str(exchange_error)}")
+                import traceback
+                current_app.logger.error(traceback.format_exc())
+                return {
+                    "success": False,
+                    "error": "Error al intercambiar código",
+                    "redirect_url": "/register?error=exchange_failed"
                 }
             
             current_app.logger.info(f" Usuario autenticado exitosamente: {user.user.email}")
