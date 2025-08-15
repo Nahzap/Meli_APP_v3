@@ -19,7 +19,6 @@ from supabase_client import db
 from searcher import Searcher
 from qr_code.generator import QRGenerator
 from auth_manager import AuthManager
-from auth_manager import auth_manager
 import segno
 
 logger = logging.getLogger(__name__)
@@ -570,7 +569,7 @@ def logout():
     """
     Cierra la sesión del usuario actual
     """
-    result = auth_manager.logout_user()
+    result = AuthManager.logout_user()
     if result['success']:
         return redirect(result['redirect_url'])
     else:
@@ -840,7 +839,7 @@ def api_google_auth():
     API endpoint para iniciar el flujo de autenticación con Google.
     """
     try:
-        result = auth_manager.api_google_auth()
+        result = AuthManager.api_google_auth()
         if result.get('success'):
             return redirect(result.get('url'))
         else:
@@ -858,7 +857,7 @@ def auth_callback():
     
     # Si hay un código, procesarlo directamente
     if code:
-        result = auth_manager.handle_google_callback(code)
+        result = AuthManager.handle_google_callback(code)
         if result['success']:
             return redirect(result['redirect_url'])
         else:

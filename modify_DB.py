@@ -3,81 +3,33 @@ Módulo general para operaciones de escritura/modificación en la base de datos
 Permite actualizar cualquier tabla/campo desde formularios JSON con manejo de RLS
 """
 
-from flask import jsonify, g, session
 import logging
-from supabase import create_client
 from typing import Dict, Any, Optional, Tuple
-import os
 import json
-from auth_manager import AuthManager
 from gmaps_utils import process_ubicacion_data
+from auth_manager import AuthManager
 
 logger = logging.getLogger(__name__)
 
 class DatabaseModifier:
     """Clase principal para manejar todas las operaciones de escritura en la base de datos"""
     
-    def __init__(self):
-        self.supabase_url = os.getenv('SUPABASE_URL')
-        self.supabase_key = os.getenv('SUPABASE_KEY')
-        
     def get_authenticated_client(self):
-        """Obtener cliente Supabase autenticado con JWT del usuario"""
-        try:
-            # Intentar múltiples fuentes de token
-            token = None
-            
-            # 1. Desde session
-            if 'access_token' in session:
-                token = session['access_token']
-                logger.info("Token obtenido desde session")
-            
-            # 2. Desde g.user
-            elif hasattr(g, 'user') and g.user:
-                token = g.user.get('access_token')
-                logger.info("Token obtenido desde g.user")
-            
-            # 3. Desde auth_manager si está disponible
-            else:
-                try:
-                    from auth_manager import AuthManager
-                    auth_manager = AuthManager()
-                    current_user = auth_manager.load_current_user()
-                    if current_user and 'access_token' in current_user:
-                        token = current_user['access_token']
-                        logger.info("Token obtenido desde auth_manager")
-                except ImportError:
-                    pass
-            
-            if not token:
-                logger.error("No se encontró token de acceso en ninguna fuente")
-                return None
-                
-            logger.info(f"Token encontrado: {token[:10]}...")
-            
-            # Crear cliente autenticado
-            auth_client = create_client(self.supabase_url, self.supabase_key)
-            auth_client.postgrest.auth(token)
-            
-            # Verificar autenticación
-            test_result = auth_client.table('usuarios').select('id').limit(1).execute()
-            logger.info("Cliente autenticado exitosamente")
-            return auth_client
-            
-        except Exception as e:
-            logger.error(f"Error creando cliente autenticado: {e}")
-            return None
+        """Cliente Supabase autenticado único usando auth_manager"""
+        return AuthManager.get_authenticated_client()
     
     def get_auth_user_id(self, auth_client, user_uuid):
         """Obtener el auth_user_id correspondiente al user_uuid"""
         try:
             user_info = auth_client.table('usuarios').select('auth_user_id').eq('id', user_uuid).single().execute()
-            if not user_info.data:
-                return None
-            return user_info.data['auth_user_id']
+            return user_info.data['auth_user_id'] if user_info.data else None
         except Exception as e:
             logger.error(f"Error obteniendo auth_user_id: {e}")
             return None
+    
+    def get_current_user_uuid(self):
+        """Obtener el UUID del usuario actual usando auth_manager"""
+        return AuthManager.get_current_user_id()
     
     def validate_field(self, field_name, value, validation_rules=None):
         """Validar un campo según reglas específicas"""

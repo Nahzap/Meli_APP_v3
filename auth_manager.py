@@ -10,6 +10,7 @@ Este módulo maneja todo lo relacionado con:
 """
 
 import logging
+import os
 from functools import wraps
 from flask import session, request, redirect, url_for, flash, g, jsonify, current_app
 import uuid
@@ -20,6 +21,76 @@ from supabase_client import db
 
 class AuthManager:
     """Gestor centralizado de autenticación y sesiones de usuario."""
+    
+    # Cache para cliente autenticado
+    _authenticated_client = None
+    
+    @classmethod
+    def get_authenticated_client(cls):
+        """
+        Única fuente de cliente Supabase autenticado
+        Elimina todas las redundancias de búsqueda de tokens
+        """
+        if cls._authenticated_client is not None:
+            return cls._authenticated_client
+            
+        try:
+            # Obtener token de la única fuente confiable
+            token = cls._get_auth_token()
+            if not token:
+                logger.error("No hay token de autenticación disponible")
+                return None
+                
+            # Crear cliente autenticado
+            from supabase import create_client
+            auth_client = create_client(
+                os.getenv('SUPABASE_URL'),
+                os.getenv('SUPABASE_KEY')
+            )
+            auth_client.postgrest.auth(token)
+            
+            # Verificar que funciona
+            auth_client.table('usuarios').select('id').limit(1).execute()
+            
+            cls._authenticated_client = auth_client
+            return auth_client
+            
+        except Exception as e:
+            logger.error(f"Error creando cliente autenticado: {e}")
+            return None
+    
+    @classmethod
+    def _get_auth_token(cls):
+        """
+        Única función para obtener tokens - elimina redundancias
+        Orden de prioridad: session → g.user → None
+        """
+        # 1. Session (prioridad máxima)
+        if 'access_token' in session:
+            return session['access_token']
+            
+        # 2. g.user (compatibilidad)
+        if hasattr(g, 'user') and g.user and 'access_token' in g.user:
+            return g.user['access_token']
+            
+        return None
+    
+    @classmethod
+    def store_auth_token(cls, access_token, refresh_token=None):
+        """Almacena tokens en la única ubicación necesaria"""
+        session['access_token'] = access_token
+        if refresh_token:
+            session['refresh_token'] = refresh_token
+    
+    @classmethod
+    def get_current_user_id(cls):
+        """ID de usuario único y consistente"""
+        return session.get('user_id') or (g.user.get('id') if hasattr(g, 'user') else None)
+    
+    @classmethod
+    def is_user_authenticated(cls):
+        """Verificación única de autenticación"""
+        return cls.get_current_user_id() is not None
     
     @staticmethod
     def login_required(f):
@@ -43,32 +114,23 @@ class AuthManager:
     @staticmethod
     def load_current_user():
         """
-        Carga la información del usuario actual en g.user para todas las peticiones.
-        Mapea el UUID de autenticación al UUID de la tabla usuarios usando la función del searcher.
+        Carga información del usuario actual usando la autenticación centralizada
         """
         g.user = None
-        if 'user_id' in session:
-            auth_user_id = session.get('user_id')
+        
+        user_id = AuthManager.get_current_user_id()
+        if not user_id:
+            return
             
-            # Obtener el UUID de la tabla usuarios - método único y eficiente
-            user_uuid = auth_user_id  # Por defecto, usar el auth_user_id como UUID del perfil
-            
-            # Solo buscar si realmente necesitamos mapear (para compatibilidad futura)
-            try:
-                response = db.client.table('usuarios').select('id').eq('auth_user_id', auth_user_id).execute()
-                if response.data and len(response.data) > 0:
-                    user_uuid = response.data[0]['id']
-            except Exception as e:
-                # Silencioso para evitar spam en logs
-                pass
-            
-            g.user = {
-                'id': auth_user_id,  # UUID de autenticación
-                'user_uuid': user_uuid,  # UUID de la tabla usuarios (obtenido con searcher)
-                'name': session.get('user_name'),
-                'email': session.get('user_email'),
-                'empresa': session.get('user_empresa', '')
-            }
+        # Usar la información almacenada en session
+        g.user = {
+            'id': user_id,
+            'user_uuid': user_id,
+            'name': session.get('user_name'),
+            'email': session.get('user_email'),
+            'empresa': session.get('user_empresa', ''),
+            'access_token': AuthManager._get_auth_token()
+        }
     
     @staticmethod
     def login_user(email: str, password: str):
@@ -133,18 +195,12 @@ class AuthManager:
             session['user_name'] = contact_info.get('nombre_completo') or user.user_metadata.get('full_name', user.email)
             session['user_empresa'] = contact_info.get('nombre_empresa', '')
             
-            # Almacenar tokens JWT para RLS
-            try:
-                # Extraer tokens correctamente de la respuesta de Supabase
-                session_data = auth_response.session
-                if session_data:
-                    session['access_token'] = session_data.access_token
-                    session['refresh_token'] = session_data.refresh_token
-                    current_app.logger.info(f"JWT tokens stored in session for user: {user.email}")
-                else:
-                    current_app.logger.error("No session data in auth response")
-            except Exception as e:
-                current_app.logger.error(f"Error almacenando tokens JWT: {str(e)}")
+            # Almacenar tokens usando la función centralizada
+            if auth_response.session:
+                AuthManager.store_auth_token(
+                    auth_response.session.access_token,
+                    auth_response.session.refresh_token
+                )
             
             return {
                 "success": True,
