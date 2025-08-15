@@ -276,8 +276,9 @@ class AuthManager:
             dict: URL de redirección para Google OAuth
         """
         try:
-            # Usar el método correcto de Supabase Auth para OAuth
-            redirect_uri = f"{request.url_root}auth/callback"
+            # Usar URL base dinámica en lugar de localhost
+            base_url = request.environ.get('HTTP_X_FORWARDED_PROTO', request.scheme) + '://' + request.environ.get('HTTP_X_FORWARDED_HOST', request.host)
+            redirect_uri = f"{base_url}/auth/callback"
             
             auth_response = db.client.auth.sign_in_with_oauth({
                 "provider": "google",
@@ -317,11 +318,15 @@ class AuthManager:
             dict: Respuesta JSON con la URL de redirección
         """
         try:
+            # Usar URL base dinámica en lugar de localhost
+            base_url = request.environ.get('HTTP_X_FORWARDED_PROTO', request.scheme) + '://' + request.environ.get('HTTP_X_FORWARDED_HOST', request.host)
+            redirect_uri = f"{base_url}/auth/callback"
+            
             # Obtener la URL de redirección para Google OAuth
             auth_response = db.client.auth.sign_in_with_oauth({
                 "provider": "google",
                 "options": {
-                    "redirect_to": f"{request.url_root}auth/callback"
+                    "redirect_to": redirect_uri
                 }
             })
             
