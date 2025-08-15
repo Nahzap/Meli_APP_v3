@@ -4,7 +4,7 @@ Módulo de rutas y endpoints para la aplicación MeliAPP_v2.
 Este módulo contiene todas las rutas Flask organizadas por categorías:
 - Rutas de API
 - Rutas web
-- Rutas de autenticación (delegadas a auth_manager)
+- Rutas de autenticación (delegadas a AuthManager)
 - Rutas de búsqueda
 - Rutas de perfiles
 - Rutas de QR
@@ -92,7 +92,7 @@ def list_tables():
         return jsonify({"success": False, "error": str(e)}), 500
 
 @api_bp.route('/gestionar-lote', methods=['POST'])
-@auth_manager.login_required
+@AuthManager.login_required
 def manejar_lote_de_miel():
     """
     Endpoint para crear o actualizar un lote de miel.
@@ -485,7 +485,7 @@ def auth_test():
     return render_template('pages/auth_test.html')
 
 @web_bp.route('/gestionar-lote')
-@auth_manager.login_required
+@AuthManager.login_required
 def gestionar_lote():
     """
     Página para gestionar lotes de miel con formulario interactivo.
@@ -952,7 +952,7 @@ def api_register():
         if not data:
             return jsonify({"success": False, "error": "JSON requerido"}), 400
             
-        result = auth_manager.api_register(data)
+        result = AuthManager.api_register(data)
         
         if result.get('success'):
             return jsonify(result)
@@ -964,7 +964,7 @@ def api_register():
         return jsonify({"success": False, "error": "Error al procesar el registro"}), 500
 
 @web_bp.route('/edit-profile')
-@auth_manager.login_required
+@AuthManager.login_required
 def edit_profile():
     """
     Página de edición de perfil para usuarios autenticados.

@@ -15,7 +15,7 @@ class DatabaseModifier:
     """Clase principal para manejar todas las operaciones de escritura en la base de datos"""
     
     def get_authenticated_client(self):
-        """Cliente Supabase autenticado único usando auth_manager"""
+        """Cliente Supabase autenticado único usando AuthManager"""
         return AuthManager.get_authenticated_client()
     
     def get_auth_user_id(self, auth_client, user_uuid):
@@ -28,7 +28,7 @@ class DatabaseModifier:
             return None
     
     def get_current_user_uuid(self):
-        """Obtener el UUID del usuario actual usando auth_manager"""
+        """Obtener el UUID del usuario actual usando AuthManager"""
         return AuthManager.get_current_user_id()
     
     def validate_field(self, field_name, value, validation_rules=None):

@@ -1,14 +1,14 @@
 from flask import Blueprint, request, jsonify, g
 import logging
 from modify_DB import db_modifier, update_user_data
-from auth_manager import auth_manager
+from auth_manager import AuthManager
 
 logger = logging.getLogger(__name__)
 
 edit_bp = Blueprint('edit_user_data', __name__)
 
 @edit_bp.route('/api/edit/usuarios', methods=['POST'])
-@auth_manager.login_required
+@AuthManager.login_required
 def edit_usuarios():
     """Editar información de usuario usando el módulo modify_DB"""
     try:
@@ -59,7 +59,7 @@ def edit_usuarios():
         return jsonify({"success": False, "error": str(e)}), 500
 
 @edit_bp.route('/api/edit/ubicaciones', methods=['POST'])
-@auth_manager.login_required
+@AuthManager.login_required
 def edit_ubicaciones():
     """Editar ubicaciones con conversión automática de Plus Code y debug exhaustivo"""
     try:
@@ -159,7 +159,7 @@ def edit_ubicaciones():
         return jsonify({"success": False, "error": str(e)}), 500
 
 @edit_bp.route('/api/data/usuarios', methods=['GET'])
-@auth_manager.login_required
+@AuthManager.login_required
 def get_usuario_data():
     """Obtener datos del usuario autenticado para el formulario de edición"""
     try:
@@ -190,7 +190,7 @@ def get_usuario_data():
         return jsonify({"success": False, "error": str(e)}), 500
 
 @edit_bp.route('/api/data/ubicaciones', methods=['GET'])
-@auth_manager.login_required
+@AuthManager.login_required
 def get_ubicaciones_data():
     """Obtener ubicaciones del usuario autenticado"""
     try:
@@ -211,7 +211,7 @@ def get_ubicaciones_data():
         return jsonify({"success": False, "error": str(e)}), 500
 
 @edit_bp.route('/api/data/info_contacto', methods=['GET'])
-@auth_manager.login_required
+@AuthManager.login_required
 def get_info_contacto_data():
     """Obtener datos de info_contacto del usuario autenticado"""
     try:
@@ -232,7 +232,7 @@ def get_info_contacto_data():
         return jsonify({"success": False, "error": str(e)}), 500
 
 @edit_bp.route('/api/edit/info_contacto', methods=['POST'])
-@auth_manager.login_required
+@AuthManager.login_required
 def edit_info_contacto():
     """Editar información de contacto del usuario usando el módulo modify_DB"""
     try:
