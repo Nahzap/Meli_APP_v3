@@ -298,25 +298,56 @@ class AuthManager:
             current_app.logger.info(f"URL de redirección: {redirect_url}")
             
             # Configurar el flujo OAuth con Supabase
-            auth_response = db.client.auth.sign_in_with_oauth({
-                'provider': 'google',
-                'options': {
-                    'redirect_to': redirect_url,
-                    'scopes': 'email profile openid'
-                }
-            })
-            
-            current_app.logger.info("Respuesta de Supabase auth recibida")
-            
-            # Manejar diferentes formatos de respuesta
-            if isinstance(auth_response, dict):
-                url = auth_response.get('url')
-            elif hasattr(auth_response, 'url'):
-                url = auth_response.url
-            elif hasattr(auth_response, 'data') and auth_response.data:
-                url = auth_response.data.get('url')
-            else:
+            try:
+                response = db.client.auth.sign_in_with_oauth({
+                    'provider': 'google',
+                    'options': {
+                        'redirect_to': redirect_url,
+                        'scopes': 'email profile openid'
+                    }
+                })
+                
+                current_app.logger.info(f"Respuesta de Supabase auth: {type(response)}")
+                current_app.logger.info(f"Respuesta completa: {response}")
+                
+                # Extraer URL de manera segura
                 url = None
+                
+                if hasattr(response, 'url') and response.url:
+                    url = response.url
+                elif isinstance(response, dict) and 'url' in response:
+                    url = response['url']
+                elif hasattr(response, 'data') and response.data and hasattr(response.data, 'url'):
+                    url = response.data.url
+                elif hasattr(response, '__dict__'):
+                    # Buscar url en cualquier atributo
+                    for attr in dir(response):
+                        if 'url' in attr.lower() and hasattr(response, attr):
+                            url_value = getattr(response, attr)
+                            if url_value:
+                                url = url_value
+                                break
+                
+                if url:
+                    current_app.logger.info(f"URL generada exitosamente: {url}")
+                    return {'success': True, 'url': url}
+                else:
+                    current_app.logger.error("No se pudo obtener URL de la respuesta")
+                    return {
+                        'success': False,
+                        'error': 'No se pudo generar URL de autenticación',
+                        'status_code': 500
+                    }
+                    
+            except Exception as e:
+                current_app.logger.error(f"Error en sign_in_with_oauth: {str(e)}")
+                import traceback
+                current_app.logger.error(traceback.format_exc())
+                return {
+                    'success': False,
+                    'error': str(e),
+                    'status_code': 500
+                }
                 
         except Exception as e:
             current_app.logger.error(f" Error en init_google_oauth_flow: {str(e)}")
