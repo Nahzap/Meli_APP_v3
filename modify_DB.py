@@ -84,6 +84,14 @@ class DatabaseModifier:
             # Filtrar campos permitidos
             if field_mappings:
                 update_data = {}
+                current_record = {}
+                
+                # Obtener el registro actual
+                ref_field = 'id' if table == 'usuarios' else 'usuario_id'
+                current_data = auth_client.table(table).select('*').eq(ref_field, user_uuid).execute()
+                if current_data.data:
+                    current_record = current_data.data[0]
+                
                 for field, value in data.items():
                     if field in field_mappings:
                         # Validar campo
@@ -98,18 +106,34 @@ class DatabaseModifier:
                             if not unique:
                                 return {"success": False, "error": f"{field} ya existe"}, 400
                         
-                        update_data[field] = value
+                        # IGNORAR COMPLETAMENTE campos vacíos o None - preservar datos existentes
+                        if value is None:
+                            continue
+                            
+                        new_value = str(value).strip()
+                        
+                        # SOLO actualizar si el nuevo valor tiene contenido real (no vacío)
+                        if new_value != '':
+                            update_data[field] = value
+                        # Si el valor es vacío, ignorarlo completamente - NO actualizar ni sobrescribir
+                
+                # Si no hay datos válidos para actualizar (todos los campos eran vacíos)
+                if not update_data:
+                    logger.info("No hay datos válidos para actualizar - todos los campos estaban vacíos")
+                    return {
+                        "success": True,
+                        "message": "No se realizaron cambios - los campos vacíos no sobrescriben datos existentes",
+                        "data": current_data.data
+                    }, 200
+                
             else:
                 # Permitir todos los campos si no hay mapeo específico
                 update_data = data
             
-            if not update_data:
-                return {"success": False, "error": "No hay campos para actualizar"}, 400   
-            
             # Determinar campo de referencia según la tabla
             if table == 'usuarios':
-                ref_field = 'auth_user_id'
-                ref_value = auth_user_id
+                ref_field = 'id'
+                ref_value = user_uuid
             elif table == 'info_contacto':
                 # CRÍTICO: Buscar el usuario_id correcto basado en auth_user_id
                 user_mapping = auth_client.table('usuarios').select('id').eq('auth_user_id', auth_user_id).single().execute()
@@ -136,8 +160,9 @@ class DatabaseModifier:
                     # PASO CRÍTICO: Verificar que el usuario autenticado es el dueño
                     logger.info(f"Verificando ownership: auth_user_id={auth_user_id} vs usuario_id={user_uuid}")
                     
-                    # Paso 1: Verificar datos actuales
-                    current_data = auth_client.table(table).select('*').eq(ref_field, ref_value).execute()
+                    # Obtener el registro actual
+                    ref_field = 'id' if table == 'usuarios' else 'usuario_id'
+                    current_data = auth_client.table(table).select('*').eq(ref_field, user_uuid).execute()
                     logger.info(f"Datos actuales: {json.dumps(current_data.data, ensure_ascii=False)}")
                     
                     # Mapeo de campos por tabla
@@ -417,11 +442,16 @@ def update_user_location(data, user_uuid):
 def update_user_contact(data, user_uuid):
     """Actualizar información de contacto del usuario"""
     field_mappings = {
+        'nombre_completo': {},  # ¡FALTABA ESTE CAMPO!
+        'nombre_empresa': {},
         'correo_principal': {},
         'telefono_principal': {},
         'correo_secundario': {},
         'telefono_secundario': {},
-        'sitio_web': {}
+        'direccion': {},
+        'comuna': {},
+        'region': {},
+        'pais': {}
     }
     
     validation_rules = {

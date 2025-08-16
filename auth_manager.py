@@ -17,6 +17,163 @@ import uuid
 from datetime import datetime
 from supabase_client import db
 
+logger = logging.getLogger(__name__)
+
+class GoogleOAuth:
+    """Clase unificada para manejar todo el flujo OAuth de Google"""
+    
+    def __init__(self):
+        self.provider = 'google'
+    
+    def get_base_url(self):
+        """Obtiene la URL base dinámica"""
+        from app import get_base_url
+        return get_base_url()
+    
+    def generate_auth_url(self):
+        """Genera la URL de autenticación OAuth"""
+        try:
+            logger.info("Generando URL de autenticación OAuth")
+            
+            redirect_url = f"{self.get_base_url()}/auth/callback"
+            logger.info(f"URL de callback: {redirect_url}")
+            
+            response = db.client.auth.sign_in_with_oauth({
+                'provider': self.provider,
+                'options': {
+                    'redirect_to': redirect_url
+                }
+            })
+            
+            # Extraer URL de manera robusta
+            url = self._extract_url_from_response(response)
+            
+            if url:
+                logger.info(f"URL OAuth generada exitosamente")
+                return {'success': True, 'url': url}
+            else:
+                logger.error("No se pudo extraer URL de la respuesta")
+                return {
+                    'success': False,
+                    'error': 'No se pudo generar URL de autenticación'
+                }
+                
+        except Exception as e:
+            logger.error(f"Error generando URL OAuth: {str(e)}")
+            return {
+                'success': False,
+                'error': 'Error al conectar con Google. Verifica la configuración en Supabase Dashboard.'
+            }
+    
+    def _extract_url_from_response(self, response):
+        """Extrae la URL de diferentes tipos de respuesta"""
+        if hasattr(response, 'url') and response.url:
+            return response.url
+        elif hasattr(response, 'data') and response.data and hasattr(response.data, 'url'):
+            return response.data.url
+        elif isinstance(response, dict) and 'url' in response:
+            return response['url']
+        return None
+    
+    def handle_callback(self, code):
+        """Maneja el callback OAuth y crea/actualiza usuario"""
+        try:
+            logger.info("Procesando callback OAuth")
+            
+            if not code:
+                return {
+                    'success': False,
+                    'error': 'Código de autorización requerido',
+                    'redirect_url': '/register?error=no_code'
+                }
+            
+            # Intercambiar código por sesión
+            response = db.client.auth.exchange_code_for_session({
+                'auth_code': code
+            })
+            
+            if not response or not hasattr(response, 'user') or not response.user:
+                return {
+                    'success': False,
+                    'error': 'Error en autenticación',
+                    'redirect_url': '/register?error=auth_failed'
+                }
+            
+            user = response.user
+            logger.info(f"Usuario autenticado: {user.email}")
+            
+            # Crear o actualizar usuario en BD
+            user_db_id = self._create_or_update_user(user)
+            
+            # Crear sesión
+            self._create_session(user, user_db_id, response.session)
+            
+            return {
+                'success': True,
+                'redirect_url': f'/profile/{user_db_id}',
+                'user': user
+            }
+            
+        except Exception as e:
+            logger.error(f"Error en callback OAuth: {str(e)}")
+            return {
+                'success': False,
+                'error': 'Error en el proceso de autenticación',
+                'redirect_url': '/register?error=callback_failed'
+            }
+    
+    def _create_or_update_user(self, user):
+        """Crea o actualiza usuario en la base de datos"""
+        # Buscar usuario existente
+        user_check = db.client.table('usuarios').select('id').eq('auth_user_id', user.id).execute()
+        
+        if user_check.data and len(user_check.data) > 0:
+            # Usuario existente
+            user_db_id = user_check.data[0]['id']
+            logger.info(f"Usuario existente encontrado: {user.email}")
+        else:
+            # Crear nuevo usuario
+            new_user = {
+                'username': user.email,
+                'auth_user_id': user.id,
+                'tipo_usuario': 'apicultor',
+                'role': 'Apicultor',
+                'status': 'active',
+                'activo': True
+            }
+            insert_result = db.client.table('usuarios').insert(new_user).execute()
+            user_db_id = insert_result.data[0]['id']
+            logger.info(f"Nuevo usuario creado: {user.email}")
+            
+            # Crear info de contacto básica
+            self._create_contact_info(user_db_id, user)
+        
+        return user_db_id
+    
+    def _create_contact_info(self, user_db_id, user):
+        """Crea información de contacto básica para nuevo usuario"""
+        try:
+            db.client.table('info_contacto').insert({
+                'usuario_id': user_db_id,
+                'nombre_completo': user.user_metadata.get('full_name', ''),
+                'correo_principal': user.email
+            }).execute()
+        except Exception as e:
+            logger.warning(f"Error creando info_contacto: {str(e)}")
+    
+    def _create_session(self, user, user_db_id, session_data):
+        """Crea la sesión de usuario"""
+        session['user_id'] = user_db_id
+        session['auth_user_id'] = str(user.id)
+        session['user_email'] = user.email
+        session['user_name'] = user.user_metadata.get('full_name', user.email)
+        
+        # Almacenar tokens si están disponibles
+        if session_data:
+            session['access_token'] = session_data.access_token
+            if session_data.refresh_token:
+                session['refresh_token'] = session_data.refresh_token
+
 # logger = logging.getLogger(__name__)
 
 class AuthManager:
@@ -319,385 +476,30 @@ class AuthManager:
                 "status_code": 500
             }
     
-    @staticmethod
-    def _get_base_url():
-        """
-        Obtiene la URL base dinámica según el entorno.
-        Usa la función centralizada get_base_url() de app.py
-        
-        Returns:
-            str: URL base completa
-        """
-        # Importar dinámicamente para evitar import circular
-        from app import get_base_url
-        return get_base_url()
+    # Instancia global de OAuth
+    _google_oauth = None
+    
+    @classmethod
+    def get_google_oauth(cls):
+        """Obtiene la instancia singleton de GoogleOAuth"""
+        if cls._google_oauth is None:
+            cls._google_oauth = GoogleOAuth()
+        return cls._google_oauth
     
     @staticmethod
-    def init_google_oauth_flow(is_api=False):
-        """
-        Método único y unificado para iniciar el flujo de autenticación con Google OAuth.
-        
-        Args:
-            is_api (bool): Si es True, retorna formato JSON. Si es False, retorna formato web.
-            
-        Returns:
-            dict: URL de redirección para Google OAuth
-        """
-        try:
-            current_app.logger.info(f"Iniciando init_google_oauth_flow - is_api: {is_api}")
-            
-            # Detectar URL base automáticamente desde el entorno o request
-            base_url = AuthManager._get_base_url()
-            current_app.logger.info(f"URL base detectada: {base_url}")
-            
-            redirect_url = f"{base_url}/auth/callback"
-            current_app.logger.info(f"URL de redirección: {redirect_url}")
-            
-            # Verificar que estamos en producción
-            is_production = 'vercel.app' in base_url or 'meli-app' in base_url
-            current_app.logger.info(f"Entorno de producción detectado: {is_production}")
-            
-            if is_production:
-                current_app.logger.info("⚠️ IMPORTANTE: Verificar que las siguientes URLs estén configuradas:")
-                current_app.logger.info(f"   - Supabase Dashboard: {redirect_url}")
-                current_app.logger.info(f"   - Google Cloud Console: https://auth.supabase.co/auth/v1/callback")
-                current_app.logger.info(f"   - Google Cloud Console redirect URI: https://auth.supabase.co/auth/v1/callback")
-            
-            # Configurar el flujo OAuth con Supabase
-            try:
-                response = db.client.auth.sign_in_with_oauth({
-                    'provider': 'google',
-                    'options': {
-                        'redirect_to': redirect_url,
-                        'scopes': 'email profile openid'
-                    }
-                })
-                
-                current_app.logger.info(f"Respuesta de Supabase auth: {type(response)}")
-                current_app.logger.info(f"Respuesta completa: {response}")
-                
-                # Extraer URL de manera segura
-                url = None
-                
-                if hasattr(response, 'url') and response.url:
-                    url = response.url
-                elif isinstance(response, dict) and 'url' in response:
-                    url = response['url']
-                elif hasattr(response, 'data') and response.data and hasattr(response.data, 'url'):
-                    url = response.data.url
-                elif hasattr(response, '__dict__'):
-                    # Buscar url en cualquier atributo
-                    for attr in dir(response):
-                        if 'url' in attr.lower() and hasattr(response, attr):
-                            url_value = getattr(response, attr)
-                            if url_value:
-                                url = url_value
-                                break
-                
-                if url:
-                    current_app.logger.info(f"URL generada exitosamente: {url}")
-                    return {'success': True, 'url': url}
-                else:
-                    current_app.logger.error("No se pudo obtener URL de la respuesta")
-                    return {
-                        'success': False,
-                        'error': 'No se pudo generar URL de autenticación',
-                        'status_code': 500
-                    }
-                    
-            except Exception as e:
-                current_app.logger.error(f"Error en sign_in_with_oauth: {str(e)}")
-                import traceback
-                current_app.logger.error(traceback.format_exc())
-                return {
-                    'success': False,
-                    'error': str(e),
-                    'status_code': 500
-                }
-                
-        except Exception as e:
-            current_app.logger.error(f" Error en init_google_oauth_flow: {str(e)}")
-            current_app.logger.error(f" Tipo de error: {type(e).__name__}")
-            import traceback
-            current_app.logger.error(f" Traceback: {traceback.format_exc()}")
-            return {
-                "success": False,
-                "error": "Error al conectar con Google",
-                "status_code": 500
-            }
-
-    @staticmethod
     def init_google_auth():
-        """
-        Inicia el flujo de autenticación con Google OAuth (versión web).
-        
-        Returns:
-            dict: URL de redirección para Google OAuth
-        """
-        return AuthManager.init_google_oauth_flow(is_api=False)
+        """Inicia el flujo de autenticación con Google OAuth"""
+        return AuthManager.get_google_oauth().generate_auth_url()
 
     @staticmethod
     def api_google_auth():
-        """
-        API endpoint para iniciar el flujo de autenticación con Google OAuth.
-        
-        Returns:
-            dict: Respuesta JSON con la URL de redirección
-        """
-        return AuthManager.init_google_oauth_flow(is_api=True)
+        """API endpoint para iniciar el flujo de autenticación con Google OAuth"""
+        return AuthManager.get_google_oauth().generate_auth_url()
     
     @staticmethod
     def handle_google_callback(code: str):
-        """
-        Maneja el callback de Google OAuth.
-        
-        Args:
-            code: Código de autorización de Google
-            
-        Returns:
-            dict: Resultado del proceso de autenticación
-        """
-        try:
-            current_app.logger.info(f"INICIANDO handle_google_callback")
-            current_app.logger.info(f"Código recibido: {code}")
-            
-            if not code:
-                current_app.logger.error("No se proporcionó código de autorización")
-                return {
-                    "success": False,
-                    "error": "Código de autorización requerido",
-                    "redirect_url": "/register?error=no_code"
-                }
-            
-            # INTERCAMBIAR CÓDIGO POR SESIÓN
-            current_app.logger.info("Intercambiando código por sesión...")
-            try:
-                # Usar el método correcto para intercambiar código
-                response = db.client.auth.exchange_code_for_session({
-                    'auth_code': code
-                })
-                current_app.logger.info(f"Respuesta de exchange_code_for_session: {response}")
-                
-                if not response or not hasattr(response, 'user') or not response.user:
-                    current_app.logger.error("No se obtuvo usuario válido del intercambio")
-                    return {
-                        "success": False,
-                        "error": "Error en autenticación",
-                        "redirect_url": "/register?error=auth_failed"
-                    }
-                
-                user = response.user
-                current_app.logger.info(f"Usuario autenticado: {user.email}")
-                
-                # Guardar en sesión
-                session['user_id'] = user.id
-                session['user_email'] = user.email
-                
-                # Obtener información del usuario para la sesión
-                try:
-                    user_info = db.client.table('usuarios')\
-                        .select('id', 'username')\
-                        .eq('auth_user_id', user.id)\
-                        .execute()
-                    
-                    if user_info.data and len(user_info.data) > 0:
-                        user_db_id = user_info.data[0]['id']
-                        session['user_name'] = user_info.data[0]['username']
-                        
-                        # Obtener información de contacto usando el ID de la tabla usuarios
-                        contact_info = db.client.table('info_contacto')\
-                            .select('nombre_empresa')\
-                            .eq('usuario_id', user_db_id)\
-                            .execute()
-                        
-                        if contact_info.data and len(contact_info.data) > 0:
-                            session['user_empresa'] = contact_info.data[0].get('nombre_empresa', '')
-                        else:
-                            session['user_empresa'] = ''
-                    else:
-                        session['user_name'] = user.email  # Fallback al email
-                        session['user_empresa'] = ''
-                        
-                except Exception as e:
-                    current_app.logger.warning(f"Error al obtener info de usuario: {str(e)}")
-                    session['user_name'] = user.email
-                    session['user_empresa'] = ''
-                
-                # Verificar/crear usuario en base de datos - lógica simplificada
-                try:
-                    # Buscar usuario por auth_user_id
-                    user_check = db.client.table('usuarios').select('id').eq('auth_user_id', user.id).execute()
-                    
-                    if user_check.data and len(user_check.data) > 0:
-                        # Usuario ya existe, solo loguear
-                        user_db_id = user_check.data[0]['id']
-                        current_app.logger.info(f"Usuario existente - login directo: {user.email}")
-                    else:
-                        # Buscar por email para ver si existe sin auth_id
-                        email_check = db.client.table('usuarios').select('id').eq('username', user.email).execute()
-                        
-                        if email_check.data and len(email_check.data) > 0:
-                            # Actualizar auth_user_id en usuario existente
-                            user_db_id = email_check.data[0]['id']
-                            db.client.table('usuarios').update({'auth_user_id': user.id}).eq('username', user.email).execute()
-                            current_app.logger.info(f"Usuario existente actualizado: {user.email}")
-                        else:
-                            # Crear nuevo usuario con todos los registros vacíos necesarios
-                            new_user = {
-                                'username': user.email,
-                                'auth_user_id': user.id,
-                                'tipo_usuario': 'apicultor',
-                                'role': 'Apicultor',
-                                'status': 'active',
-                                'activo': True
-                            }
-                            insert_result = db.client.table('usuarios').insert(new_user).execute()
-                            user_db_id = insert_result.data[0]['id']
-                            current_app.logger.info(f"Nuevo usuario creado: {user.email}")
-                            
-                            # Crear registros vacíos esenciales según esquema actual
-                            try:
-                                # Solo info de contacto vacío (campos según esquema actual)
-                                db.client.table('info_contacto').insert({
-                                    'usuario_id': user_db_id,
-                                    'nombre_completo': '',
-                                    'nombre_empresa': '',
-                                    'correo_principal': user.email,
-                                    'telefono_principal': '',
-                                    'direccion': '',
-                                    'comuna': '',
-                                    'region': ''
-                                }).execute()
-                                
-                                # No crear ubicaciones ni origenes_botanicos vacíos
-                                # El usuario los agregará manualmente cuando lo necesite
-                                
-                            except Exception as e:
-                                current_app.logger.warning(f"Error al crear registros vacíos: {str(e)}")
-                                current_app.logger.warning(f"Detalles del error: {str(e)}")
-                    
-                    # Guardar ID de usuario para redirección
-                    session['user_uuid'] = user_db_id
-                    
-                    # Obtener el ID del usuario de nuestra tabla
-                    user_response = db.client.table('usuarios')\
-                        .select('id')\
-                        .eq('auth_user_id', user.id)\
-                        .execute()
-                    
-                    if user_response.data and len(user_response.data) > 0:
-                        user_id = user_response.data[0]['id']
-                        return {
-                            "success": True,
-                            "redirect_url": f"/profile/{user_id}",
-                            "user": user
-                        }
-                    else:
-                        # Fallback si no se encuentra el usuario
-                        return {
-                            "success": True,
-                            "redirect_url": "/search",
-                            "user": user
-                        }
-                    
-                except Exception as db_error:
-                    current_app.logger.error(f"Error en base de datos: {str(db_error)}")
-                    return {
-                        "success": False,
-                        "error": "Error al procesar usuario",
-                        "redirect_url": "/register?error=db_error"
-                    }
-                    
-            except Exception as exchange_error:
-                current_app.logger.error(f"Error en exchange_code_for_session: {str(exchange_error)}")
-                current_app.logger.error(f"Tipo de error: {type(exchange_error).__name__}")
-                current_app.logger.error(f"Mensaje de error: {str(exchange_error)}")
-                import traceback
-                current_app.logger.error(traceback.format_exc())
-                
-                # Verificar si es error de URL no autorizada
-                error_msg = str(exchange_error).lower()
-                if "redirect" in error_msg or "url" in error_msg or "unauthorized" in error_msg:
-                    current_app.logger.error("ERROR: URL de redirección no autorizada en Supabase Dashboard")
-                    current_app.logger.error("SOLUCIÓN: Agregar https://meli-app-v3.vercel.app/auth/callback en Supabase Dashboard")
-                
-                return {
-                    "success": False,
-                    "error": f"Error al intercambiar código: {str(exchange_error)}",
-                    "redirect_url": "/register?error=exchange_failed"
-                }
-            
-            current_app.logger.info(f" Usuario autenticado exitosamente: {user.user.email}")
-            current_app.logger.info(f" ID de usuario: {user.user.id}")
-            current_app.logger.info(f" Metadata: {user.user.user_metadata}")
-            
-            # Guardar datos del usuario en la sesión
-            session['user_id'] = user.user.id
-            session['user_email'] = user.user.email
-            session['user_metadata'] = user.user.user_metadata
-            
-            current_app.logger.info(" Datos guardados en sesión")
-            current_app.logger.info(f" Sesión actualizada: {dict(session)}")
-            
-            # Verificar si el usuario existe en nuestra base de datos
-            current_app.logger.info(f" Buscando usuario existente: {user.user.email}")
-            existing_user = db.client.table('usuarios').select('*').eq('email', user.user.email).execute()
-            
-            current_app.logger.info(f" Resultado búsqueda usuario: {existing_user}")
-            
-            if existing_user.data:
-                current_app.logger.info(f" Usuario existente encontrado: {user.user.email}")
-                current_app.logger.info(f" Datos usuario existente: {existing_user.data[0]}")
-                return {
-                    "success": True,
-                    "message": "Usuario autenticado exitosamente",
-                    "user": existing_user.data[0]
-                }
-            else:
-                current_app.logger.info(f" Nuevo usuario detectado: {user.user.email}")
-                
-                # Crear nuevo usuario
-                new_user_data = {
-                    'email': user.user.email,
-                    'nombre': user.user.user_metadata.get('full_name', user.user.email),
-                    'fecha_registro': datetime.now().isoformat(),
-                    'google_id': user.user.id,
-                    'avatar_url': user.user.user_metadata.get('avatar_url', '')
-                }
-                
-                current_app.logger.info(f" Datos para nuevo usuario: {new_user_data}")
-                
-                result = db.client.table('usuarios').insert(new_user_data).execute()
-                
-                current_app.logger.info(f" Resultado inserción: {result}")
-                
-                if result.data:
-                    current_app.logger.info(f" Nuevo usuario creado exitosamente: {user.user.email}")
-                    current_app.logger.info(f" Datos usuario creado: {result.data[0]}")
-                    return {
-                        "success": True,
-                        "message": "Usuario registrado exitosamente",
-                        "user": result.data[0]
-                    }
-                else:
-                    current_app.logger.error(f" Error al crear usuario: {user.user.email}")
-                    current_app.logger.error(f" Error detalles: {result}")
-                    return {
-                        "success": False,
-                        "error": "Error al registrar usuario",
-                        "status_code": 500
-                    }
-                
-        except Exception as e:
-            current_app.logger.error(f" ERROR CRÍTICO en handle_google_callback: {str(e)}")
-            current_app.logger.error(f" Tipo de error: {type(e).__name__}")
-            import traceback
-            current_app.logger.error(f" Traceback completo: {traceback.format_exc()}")
-            return {
-                "success": False,
-                "error": "Error en el proceso de autenticación",
-                "status_code": 500
-            }
+        """Maneja el callback de Google OAuth"""
+        return AuthManager.get_google_oauth().handle_callback(code)
 
     @staticmethod
     def api_register(data):

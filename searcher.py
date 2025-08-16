@@ -62,42 +62,31 @@ class Searcher:
             
         try:
             # Obtener datos del usuario
-            user_response = self.supabase.table('usuarios').select('*').eq('id', user_id).maybe_single().execute()
-            if not user_response.data:
+            user_response = self.supabase.table('usuarios').select('*').eq('id', user_id).execute()
+            user = user_response.data[0] if user_response.data else None
+            
+            if not user:
                 return None, None, [], [], [], [], "Usuario no encontrado"
-                
-            user = user_response.data
             
             # Obtener información de contacto
-            contact_response = self.supabase.table('info_contacto').select('*').eq('usuario_id', user_id).maybe_single().execute()
-            contact = contact_response.data if contact_response.data else {}
+            contact_response = self.supabase.table('info_contacto').select('*').eq('usuario_id', user_id).execute()
+            contact = contact_response.data[0] if contact_response.data else {}
             
             # Obtener ubicaciones
             locations_response = self.supabase.table('ubicaciones').select('*').eq('usuario_id', user_id).execute()
-            locations = locations_response.data if hasattr(locations_response, 'data') else []
+            locations = locations_response.data if locations_response.data else []
             
             # Obtener producciones apícolas
             producciones_response = self.supabase.table('produccion_apicola').select('*').eq('usuario_id', user_id).execute()
-            producciones = producciones_response.data if hasattr(producciones_response, 'data') else []
+            producciones = producciones_response.data if producciones_response.data else []
             
-            # Obtener orígenes botánicos (asumiendo que hay una relación con producciones)
-            origenes_botanicos = []
-            if producciones:
-                for prod in producciones:
-                    origenes_response = self.supabase.table('origenes_botanicos') \
-                        .select('*') \
-                        .eq('produccion_id', prod['id']) \
-                        .execute()
-                    if hasattr(origenes_response, 'data') and origenes_response.data:
-                        origenes_botanicos.extend(origenes_response.data)
+            # Obtener orígenes botánicos
+            origenes_response = self.supabase.table('origenes_botanicos').select('*').eq('usuario_id', user_id).execute()
+            origenes_botanicos = origenes_response.data if origenes_response.data else []
             
-            # Obtener solicitudes del apicultor
-            solicitudes_response = self.supabase.table('solicitudes_apicultor') \
-                .select('*') \
-                .eq('usuario_id', user_id) \
-                .order('created_at', desc=True) \
-                .execute()
-            solicitudes = solicitudes_response.data if hasattr(solicitudes_response, 'data') else []
+            # Obtener solicitudes
+            solicitudes_response = self.supabase.table('solicitudes_apicultor').select('*').eq('usuario_id', user_id).execute()
+            solicitudes = solicitudes_response.data if solicitudes_response.data else []
             
             return user, contact, locations, producciones, origenes_botanicos, solicitudes, ""
             
@@ -453,4 +442,139 @@ class Searcher:
             query = self.supabase.table(tabla).select('*').eq('id', id).limit(1).execute()
             return query.data[0] if query.data else None
         except:
+            return None
+    
+    def find_user_by_identifier(self, user_identifier: str) -> Optional[Dict]:
+        """
+        Función centralizada para buscar usuarios por UUID, segmento o username.
+        
+        Args:
+            user_identifier: Puede ser UUID, segmento de username, o username completo
+            
+        Returns:
+            dict: Información del usuario encontrado o None
+        """
+        if not user_identifier:
+            return None
+            
+        try:
+            # Primero intentar buscar por username exacto
+            username_response = self.supabase.table('usuarios').select('*').eq('username', user_identifier).execute()
+            if username_response.data:
+                return username_response.data[0]
+                
+            # Buscar por UUID exacto (solo si parece un UUID válido)
+            if len(user_identifier) == 36 and user_identifier.count('-') == 4:
+                user_response = self.supabase.table('usuarios').select('*').eq('id', user_identifier).execute()
+                if user_response.data:
+                    return user_response.data[0]
+                    
+            # Buscar por segmento de UUID (primeros 8 caracteres)
+            segment = self.get_uuid_segment(user_identifier)
+            if segment and len(segment) >= 4:
+                segment_response = self.supabase.table('usuarios').select('*').ilike('id', f'{segment}%').execute()
+                if segment_response.data:
+                    return segment_response.data[0]
+                    
+            # Buscar por nombre o apellido
+            name_response = self.supabase.table('usuarios').select('*').or_(
+                f"nombre.ilike.%{user_identifier}%,apellido.ilike.%{user_identifier}%"
+            ).execute()
+            if name_response.data:
+                return name_response.data[0]
+                
+        except Exception as e:
+            logger.error(f"Error en find_user_by_identifier: {str(e)}")
+            
+        return None
+
+    def search_users_by_query(self, query: str, limit: int = 10) -> List[Dict]:
+        """
+        Búsqueda flexible de usuarios por múltiples criterios.
+        
+        Args:
+            query: Término de búsqueda
+            limit: Límite de resultados
+            
+        Returns:
+            list: Lista de usuarios encontrados
+        """
+        if not query:
+            return []
+        
+        users = []
+        seen_users = set()
+        
+        # Buscar en username, nombre y apellido
+        search_fields = ['username', 'nombre', 'apellido']
+        
+        for field in search_fields:
+            try:
+                response = self.supabase.table('usuarios').select('*').ilike(field, f'%{query}%').limit(limit).execute()
+                if response.data:
+                    for user in response.data:
+                        user_id = user.get('id')
+                        if user_id and user_id not in seen_users:
+                            users.append(user)
+                            seen_users.add(user_id)
+            except:
+                continue
+        
+        return users[:limit]
+    
+    def get_user_profile_data(self, user_uuid: str) -> Optional[Dict]:
+        """
+        Obtener datos completos del perfil de usuario incluyendo información relacionada.
+        
+        Args:
+            user_uuid: UUID del usuario
+            
+        Returns:
+            dict: Datos completos del usuario o None
+        """
+        try:
+            # Obtener datos del usuario (solo columnas existentes según estructura real)
+            user_response = self.supabase.table('usuarios').select(
+                'id,username,tipo_usuario,role,status,activo,fecha_registro'
+            ).eq('id', user_uuid).execute()
+            user = user_response.data[0] if user_response.data else None
+            
+            if not user:
+                return None
+            
+            # Obtener información de contacto
+            contact_response = self.supabase.table('info_contacto').select(
+                'id,usuario_id,nombre_completo,nombre_empresa,correo_principal,telefono_principal,direccion,comuna,region'
+            ).eq('usuario_id', user_uuid).execute()
+            contact = contact_response.data[0] if contact_response.data else {}
+            
+            # Obtener ubicaciones (Oficinas apícolas)
+            locations_response = self.supabase.table('ubicaciones').select(
+                'id,usuario_id,nombre,latitud,longitud,norma_geo,descripcion'
+            ).eq('usuario_id', user_uuid).execute()
+            locations = locations_response.data if locations_response.data else []
+            
+            # Obtener producciones apícolas
+            producciones_response = self.supabase.table('produccion_apicola').select('*').eq('usuario_id', user_uuid).execute()
+            producciones = producciones_response.data if producciones_response.data else []
+            
+            # Obtener orígenes botánicos
+            origenes_response = self.supabase.table('origenes_botanicos').select('*').eq('usuario_id', user_uuid).execute()
+            origenes_botanicos = origenes_response.data if origenes_response.data else []
+            
+            # Obtener solicitudes
+            solicitudes_response = self.supabase.table('solicitudes_apicultor').select('*').eq('usuario_id', user_uuid).execute()
+            solicitudes = solicitudes_response.data if solicitudes_response.data else []
+            
+            return {
+                'user': user,
+                'contact_info': contact,
+                'locations': locations,
+                'production': producciones,
+                'botanical_origins': origenes_botanicos,
+                'requests': solicitudes
+            }
+            
+        except Exception as e:
+            logger.error(f"Error al obtener datos del perfil: {str(e)}")
             return None

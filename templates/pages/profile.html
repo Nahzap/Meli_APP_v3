@@ -86,15 +86,11 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="bg-slate-50 rounded-lg p-4">
                             <h4 class="font-semibold text-slate-700 mb-2">Username</h4>
-                            <p class="text-slate-600 text-lg font-medium">{{ user.nombre }}</p>
-                        </div>
-                        <div class="bg-slate-50 rounded-lg p-4">
-                            <h4 class="font-semibold text-slate-700 mb-2">Tipo de Usuario</h4>
-                            <p class="text-slate-600">{{ user.tipo_usuario or 'Regular' }}</p>
+                            <p class="text-slate-600 text-lg font-medium">{{ user.username or 'No disponible' }}</p>
                         </div>
                         <div class="bg-slate-50 rounded-lg p-4">
                             <h4 class="font-semibold text-slate-700 mb-2">Rol</h4>
-                            <p class="text-slate-600">{{ user.especialidad or 'Usuario' }}</p>
+                            <p class="text-slate-600">{{ user.role or 'Usuario' }}</p>
                         </div>
                         <div class="bg-slate-50 rounded-lg p-4">
                             <h4 class="font-semibold text-slate-700 mb-2">Estado</h4>
@@ -157,54 +153,54 @@
                 <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
                     <h2 class="text-xl font-semibold text-slate-900 mb-4">Información de Contacto</h2>
                     
-                    {% if user.contacto_completo %}
+                    {% if contact_info %}
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {% if user.contacto_completo.nombre_completo %}
+                        {% if contact_info.nombre_completo %}
                         <div class="bg-slate-50 rounded-lg p-4">
                             <h4 class="font-semibold text-slate-700 mb-2">Nombre Completo</h4>
-                            <p class="text-slate-600">{{ user.contacto_completo.nombre_completo }}</p>
+                            <p class="text-slate-600">{{ contact_info.nombre_completo }}</p>
                         </div>
                         {% endif %}
                         
-                        {% if user.contacto_completo.nombre_empresa %}
+                        {% if contact_info.nombre_empresa %}
                         <div class="bg-slate-50 rounded-lg p-4">
                             <h4 class="font-semibold text-slate-700 mb-2">Empresa</h4>
-                            <p class="text-slate-600">{{ user.contacto_completo.nombre_empresa }}</p>
+                            <p class="text-slate-600">{{ contact_info.nombre_empresa }}</p>
                         </div>
                         {% endif %}
                         
-                        {% if user.contacto_completo.correo_principal %}
+                        {% if contact_info.correo_principal %}
                         <div class="bg-slate-50 rounded-lg p-4">
                             <h4 class="font-semibold text-slate-700 mb-2">Correo Principal</h4>
-                            <a href="mailto:{{ user.contacto_completo.correo_principal }}" class="text-slate-600 hover:text-primary">{{ user.contacto_completo.correo_principal }}</a>
+                            <a href="mailto:{{ contact_info.correo_principal }}" class="text-slate-600 hover:text-primary">{{ contact_info.correo_principal }}</a>
                         </div>
                         {% endif %}
                         
-                        {% if user.contacto_completo.telefono_principal %}
+                        {% if contact_info.telefono_principal %}
                         <div class="bg-slate-50 rounded-lg p-4">
                             <h4 class="font-semibold text-slate-700 mb-2">Teléfono Principal</h4>
-                            <a href="tel:{{ user.contacto_completo.telefono_principal }}" class="text-slate-600 hover:text-primary">{{ user.contacto_completo.telefono_principal }}</a>
+                            <a href="tel:{{ contact_info.telefono_principal }}" class="text-slate-600 hover:text-primary">{{ contact_info.telefono_principal }}</a>
                         </div>
                         {% endif %}
                         
-                        {% if user.contacto_completo.direccion %}
+                        {% if contact_info.direccion %}
                         <div class="bg-slate-50 rounded-lg p-4">
                             <h4 class="font-semibold text-slate-700 mb-2">Dirección</h4>
-                            <p class="text-slate-600">{{ user.contacto_completo.direccion }}</p>
+                            <p class="text-slate-600">{{ contact_info.direccion }}</p>
                         </div>
                         {% endif %}
                         
-                        {% if user.contacto_completo.comuna %}
+                        {% if contact_info.comuna %}
                         <div class="bg-slate-50 rounded-lg p-4">
                             <h4 class="font-semibold text-slate-700 mb-2">Comuna</h4>
-                            <p class="text-slate-600">{{ user.contacto_completo.comuna }}</p>
+                            <p class="text-slate-600">{{ contact_info.comuna }}</p>
                         </div>
                         {% endif %}
                         
-                        {% if user.contacto_completo.region %}
+                        {% if contact_info.region %}
                         <div class="bg-slate-50 rounded-lg p-4">
                             <h4 class="font-semibold text-slate-700 mb-2">Región</h4>
-                            <p class="text-slate-600">{{ user.contacto_completo.region }}</p>
+                            <p class="text-slate-600">{{ contact_info.region }}</p>
                         </div>
                         {% endif %}
                     </div>
@@ -219,12 +215,13 @@
                 <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
                     <h2 class="text-xl font-semibold text-slate-900 mb-4">Oficinas Apícolas</h2>
                     
-                    {% if user.ubicaciones %}
+                    {% if locations %}
                     <div class="space-y-4">
-                        {% for ubicacion in user.ubicaciones %}
+                        {% for ubicacion in locations %}
                         <div class="bg-slate-50 rounded-lg p-4">
                             <h4 class="font-semibold text-slate-700 mb-2">Oficina {{ loop.index }}</h4>
                             
+                            {% if ubicacion.latitud is not none and ubicacion.longitud is not none %}
                             <div class="flex items-center space-x-2">
                                 <a href="https://www.google.com/maps?q={{ ubicacion.latitud }},{{ ubicacion.longitud }}" 
                                    target="_blank" 
@@ -236,6 +233,11 @@
                                     Ver en Google Maps
                                 </a>
                             </div>
+                            {% else %}
+                            <div class="text-slate-500 text-sm">
+                                <p>Sin coordenadas</p>
+                            </div>
+                            {% endif %}
                         </div>
                         {% endfor %}
                     </div>

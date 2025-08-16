@@ -227,6 +227,23 @@ Accede a: {base_url}
 """
     print(welcome_msg)
 
+def test_database_connection():
+    """
+    Función centralizada para probar la conexión con Supabase.
+    
+    Returns:
+        tuple: (success: bool, message: str)
+    """
+    try:
+        # Intentar una consulta simple para verificar la conexión
+        response = db.client.table('usuarios').select('id').limit(1).execute()
+        if response.data is not None:
+            return True, "Conexión exitosa con Supabase"
+        else:
+            return False, "No se pudieron obtener datos de Supabase"
+    except Exception as e:
+        return False, f"Error de conexión: {str(e)}"
+
 def init_google_oauth_flow(is_api=False):
     """Inicializa el flujo de autenticación con Google OAuth usando detección universal."""
     try:
@@ -269,8 +286,11 @@ def main():
             sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
         
         # Verificar la conexión con Supabase al inicio
-        db.test_connection()
-        print("\n[✅] Conexión con Supabase establecida correctamente")
+        success, message = test_database_connection()
+        if success:
+            print("\n[✅] Conexión con Supabase establecida correctamente")
+        else:
+            print(f"\n[❌] Error de conexión: {message}")
         
         # Mostrar rutas detalladas
         print("\n=== RUTAS REGISTRADAS ===")

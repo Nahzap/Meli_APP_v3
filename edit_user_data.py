@@ -47,9 +47,8 @@ def edit_usuarios():
         result, status_code = update_user_data(filtered_data, user_uuid)
         
         logger.info(f"✅ Resultado: {result}, Status: {status_code}")
-        
-        # Agregar URL del perfil si la actualización fue exitosa
-        if result.get('success'):
+        # Agregar URL del perfil siempre usando el UUID del usuario autenticado
+        if isinstance(result, dict) and result.get('success'):
             result['profile_url'] = f"/profile/{user_uuid}"
         
         return jsonify(result), status_code
@@ -141,11 +140,15 @@ def edit_ubicaciones():
         
         # Actualizar o insertar
         logger.info("🗺️ [UBICACIONES] 💾 Intentando actualizar base de datos...")
-        result = db_modifier.update_user_data(user_uuid, 'ubicaciones', update_data)
+        from modify_DB import update_user_location
+        result, status_code = update_user_location(update_data, user_uuid)
         
-        if result:
+        if result and isinstance(result, dict):
             logger.info(f"🗺️ [UBICACIONES] ✅ ¡ÉXITO! Ubicación actualizada para usuario {user_uuid}")
-            return jsonify({"success": True})
+            # Agregar URL de perfil al resultado
+            if result.get('success', False):
+                result['profile_url'] = f"/profile/{user_uuid}"
+            return jsonify(result), status_code
         else:
             logger.error(f"🗺️ [UBICACIONES] ❌ Error actualizando ubicación para usuario {user_uuid}")
             return jsonify({"success": False, "error": "Error al actualizar ubicación"}), 500
@@ -163,15 +166,18 @@ def edit_ubicaciones():
 def get_usuario_data():
     """Obtener datos del usuario autenticado para el formulario de edición"""
     try:
+        # Obtener el UUID del usuario autenticado desde g.user
         user_uuid = g.user.get('id')
         if not user_uuid:
-            return jsonify({"success": False, "error": "Usuario no encontrado"}), 404
+            return jsonify({"success": False, "error": "Usuario no autenticado"}), 401
+            
+        # Log para debugging
+        logger.info(f"Usuario UUID obtenido: {user_uuid}")
         
         # Obtener datos del usuario
         usuario = db_modifier.get_record('usuarios', user_uuid)
         if not usuario:
-            return jsonify({"success": False, "error": "Usuario no encontrado"}), 404
-        
+            return jsonify({"success": False, "error": "Usuario no encontrado en la base de datos"}), 404
         # Obtener información de contacto
         info_contacto = db_modifier.get_record('info_contacto', user_uuid)
         
@@ -180,9 +186,10 @@ def get_usuario_data():
         
         return jsonify({
             "success": True,
-            "usuario": usuario,
+            "usuario": db_modifier.get_record('usuarios', user_uuid),
             "info_contacto": info_contacto or {},
-            "ubicaciones": ubicaciones or {}
+            "ubicaciones": ubicaciones or {},
+            "id": user_uuid  # UUID completo del usuario autenticado
         })
         
     except Exception as e:
@@ -240,23 +247,57 @@ def edit_info_contacto():
         if not data:
             return jsonify({"success": False, "error": "Datos requeridos"}), 400
         
+        # Obtener el UUID del usuario autenticado
         user_uuid = g.user.get('id')
         if not user_uuid:
-            return jsonify({"success": False, "error": "Usuario no encontrado"}), 404
+            return jsonify({"success": False, "error": "Usuario no autenticado"}), 401
+            
+        logger.info(f"Actualizando info_contacto para usuario: {user_uuid}")
+        logger.info(f"Datos recibidos RAW: {data}")
+        logger.info(f"Tipo de datos: {type(data)}")
         
-        # Definir campos válidos para información de contacto
+        # Convertir todos los valores a strings y limpiar
+        clean_data = {}
+        for k, v in data.items():
+            if v is not None:
+                clean_data[k] = str(v).strip()
+                logger.info(f"Campo {k}: '{v}' -> '{clean_data[k]}' (len: {len(clean_data[k])})")
+        
+        # Definir campos válidos
         valid_fields = ['nombre_completo', 'nombre_empresa', 'correo_principal', 'telefono_principal', 'correo_secundario', 'telefono_secundario', 'direccion', 'comuna', 'region', 'pais']
-        filtered_data = {k: v for k, v in data.items() if k in valid_fields}
         
-        if not filtered_data:
-            return jsonify({"success": False, "error": "No hay campos para actualizar"}), 400
+        # Filtrar campos válidos
+        filtered_data = {k: v for k, v in clean_data.items() if k in valid_fields}
+        logger.info(f"Campos válidos: {filtered_data}")
         
-        # Usar el módulo modify_DB para actualizar
-        result, status_code = db_modifier.update_record('info_contacto', filtered_data, user_uuid)
+        # Verificar contenido real
+        has_content = False
+        for k, v in filtered_data.items():
+            if v and str(v).strip():
+                logger.info(f"Campo CON contenido: {k} = '{v}'")
+                has_content = True
+            else:
+                logger.info(f"Campo SIN contenido: {k} = '{v}'")
         
-        # Agregar URL de perfil al resultado (igual que usuarios)
-        if result.get('success', False):
+        logger.info(f"¿Tiene contenido real?: {has_content}")
+        
+        if not has_content:
+            return jsonify({"success": False, "error": "Por favor ingresa al menos un valor válido"}), 400
+        
+        # Solo enviar campos con contenido real
+        final_data = {k: v for k, v in filtered_data.items() if v and str(v).strip()}
+        logger.info(f"Datos finales para actualizar: {final_data}")
+        
+        # Usar la función específica para info_contacto
+        from modify_DB import update_user_contact
+        result, status_code = update_user_contact(filtered_data, user_uuid)
+        
+        # Agregar URL del perfil siempre usando el UUID del usuario autenticado
+        if isinstance(result, dict) and result.get('success', False):
             result['profile_url'] = f"/profile/{user_uuid}"
+            result['user_id'] = user_uuid  # Asegurar que incluya el ID
+            result['redirect_url'] = f"/profile/{user_uuid}"  # URL explícita para redirección
+            logger.info(f"Redirección configurada: /profile/{user_uuid}")
         
         return jsonify(result), status_code
         

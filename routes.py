@@ -42,7 +42,9 @@ def test_connection():
     GET /api/test
     """
     try:
-        success, message = db.test_connection()
+        # Usar función centralizada de test desde app.py
+        from app import test_database_connection
+        success, message = test_database_connection()
         return jsonify({"success": success, "message": message})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
@@ -659,106 +661,74 @@ def profile(user_id):
     - user_id: Puede ser el UUID completo, segmento de 8 caracteres, o username
     """
     try:
-        import uuid
-        user_uuid = None
-        user_info = None
+        # Usar función centralizada para buscar usuario
+        user_info = searcher.find_user_by_identifier(user_id)
         
-        # Paso 1: Intentar buscar por UUID completo
-        try:
-            uuid.UUID(user_id)
-            user_uuid = user_id
-            
-            user_response = searcher.supabase.table('usuarios').select('*').eq('id', user_uuid).execute()
-            if user_response.data:
-                user_info = user_response.data[0]
-                logger.info(f"Usuario encontrado por UUID completo: {user_uuid}")
-            else:
-                logger.info(f"UUID válido pero no encontrado: {user_id}")
-                user_uuid = None
-                
-        except ValueError:
-            # No es un UUID válido, continuar con otras búsquedas
-            logger.info(f"No es un UUID válido: {user_id}")
-            pass
-        
-        # Paso 2: Si no se encontró por UUID completo, intentar por segmento o username
         if not user_info:
-            # Intentar buscar por segmento de UUID (8 caracteres)
-            if len(user_id) == 8:
-                logger.info(f"Buscando por segmento de UUID: {user_id}")
-                search_response = searcher.supabase.table('usuarios')\
-                    .select('*')\
-                    .like('id', f'{user_id}%')\
-                    .limit(1)\
-                    .execute()
-                
-                if search_response.data:
-                    user_info = search_response.data[0]
-                    user_uuid = user_info['id']
-                    logger.info(f"Usuario encontrado por segmento de UUID: {user_uuid}")
+            return render_template('pages/profile.html', error="Usuario no encontrado", user=None)
             
-            # Paso 3: Intentar buscar por username (igual que en la función buscar)
-            if not user_info and len(user_id) >= 2:
-                logger.info(f"Buscando por username: {user_id}")
-                search_response = searcher.supabase.table('usuarios')\
-                    .select('*')\
-                    .ilike('username', f'%{user_id}%')\
-                    .limit(10)\
-                    .execute()
-                
-                if search_response.data:
-                    user_info = search_response.data[0]
-                    user_uuid = user_info['id']
-                    logger.info(f"Usuario encontrado por username: {user_uuid}")
+        user_uuid = user_info['id']
         
-        # Si no se encontró el usuario después de todas las búsquedas
-        if not user_info or not user_uuid:
-            logger.warning(f"Usuario no encontrado con término: {user_id}")
-            return render_template('pages/profile.html', user=None, error="Usuario no encontrado"), 404
+        # Obtener información completa del usuario usando función centralizada
+        profile_data = searcher.get_user_profile_data(user_uuid)
         
-        # Si el término de búsqueda no coincide con el UUID real, redirigir a la URL correcta
+        if not profile_data:
+            return render_template('pages/profile.html', error="Usuario no encontrado", user=None)
+            
+        # Si el ID proporcionado no es el UUID completo, redirigir
         if user_id != user_uuid:
             logger.info(f"Redirigiendo de {user_id} a {user_uuid}")
             return redirect(url_for('web.profile', user_id=user_uuid))
             
-        # Si llegamos aquí, tenemos un usuario válido con user_uuid y user_info
+        # Preparar datos para la plantilla
+        user = profile_data['user']
+        contact_info = profile_data['contact_info'] or {}
+        locations = profile_data['locations']
+        producciones = profile_data['production']
+        origenes_botanicos = profile_data['botanical_origins']
+        solicitudes = profile_data['requests']
         
-        contact_response = db.client.table('info_contacto').select('*').eq('usuario_id', user_uuid).execute()
-        contact_info = contact_response.data[0] if contact_response.data else {}
-        
-        locations_response = db.client.table('ubicaciones').select('*').eq('usuario_id', user_uuid).execute()
-        locations = locations_response.data if locations_response.data else []
-        
-        qr_url = url_for('api.get_user_qr', uuid_segment=user_uuid[:8], _external=True)
-        
-        # Validar que se encontró información de contacto
-        if not contact_response.data:
-            logger.info(f"No se encontró información de contacto para usuario_id: {user_uuid}")
-        
-        user_template_data = {
+        # Crear objeto user para la plantilla
+        user_obj = {
             'id': user_uuid,
-            'nombre': user_info.get('username', 'Usuario'),
-            'email': contact_info.get('correo_principal', ''),  # ✅ Corregido: correo_principal
-            'telefono': contact_info.get('telefono_principal', ''),  # ✅ Corregido: telefono_principal
+            'username': user.get('username', 'Usuario'),
+            'nombre': user.get('nombre', ''),
+            'apellido': user.get('apellido', ''),
+            'email': contact_info.get('correo_principal', ''),
+            'telefono': contact_info.get('telefono_principal', ''),
             'direccion': contact_info.get('direccion', ''),
             'comuna': contact_info.get('comuna', ''),
             'region': contact_info.get('region', ''),
             'nombre_empresa': contact_info.get('nombre_empresa', ''),
-            'nombre_completo': contact_info.get('nombre_completo', ''),
-            'ubicacion': locations[0].get('nombre') if locations else None,
-            'descripcion': user_info.get('descripcion', ''),
-            'especialidad': user_info.get('role', 'Apicultor'),
-            'especialidades': [user_info.get('role')] if user_info.get('role') else [],
-            'especialidades_completas': [user_info.get('role')] if user_info.get('role') else [],
-            'contacto_completo': contact_info,
-            'ubicaciones': locations
+            'descripcion': user.get('descripcion', ''),
+            'role': user.get('role', 'Apicultor'),
+            'experiencia': user.get('experiencia', ''),
+            'produccion_total': sum(p.get('cantidad_kg', 0) for p in producciones),
+            'locations': locations,
+            'producciones': producciones,
+            'qr_url': url_for('api.get_user_qr', uuid_segment=user_uuid[:8], _external=True)
         }
         
-        return render_template('pages/profile.html', user=user_template_data, qr_url=qr_url)
-                               
+        return render_template('pages/profile.html', 
+                             user=user,
+                             contact_info=contact_info,
+                             locations=locations,
+                             production=producciones,
+                             botanical_origins=origenes_botanicos,
+                             requests=solicitudes,
+                             qr_url=url_for('api.get_user_qr', uuid_segment=user_uuid[:8], _external=True))
+        
     except Exception as e:
-        logger.error(f"Error al cargar perfil: {str(e)}", exc_info=True)
-        return render_template('pages/profile.html', user=None, error="Error al cargar el perfil"), 500
+        logger.error(f"Error al cargar perfil: {str(e)}")
+        return render_template('pages/profile.html', 
+                             error="Error al cargar perfil",
+                             user=None,
+                             contact_info={},
+                             locations=[],
+                             production=[],
+                             botanical_origins=[],
+                             requests=[],
+                             qr_url=None), 500
 
 # Mantener ruta antigua para compatibilidad
 @web_bp.route('/buscar', methods=['GET', 'POST'])
@@ -770,27 +740,20 @@ def buscar():
         search_term = request.form.get('usuario_id', '').strip()
         if search_term:
             try:
-                if len(search_term) >= 2:
-                    search_response = searcher.supabase.table('usuarios')\
-                        .select('id', 'username', 'role')\
-                        .ilike('username', f'%{search_term}%')\
-                        .limit(10)\
-                        .execute()
-                    
-                    if not search_response.data:
-                        search_response = searcher.supabase.table('usuarios')\
-                            .select('id', 'username', 'role')\
-                            .eq('id', search_term)\
-                            .limit(1)\
-                            .execute()
-                    
-                    if search_response.data:
-                        user = search_response.data[0]
-                        return redirect(url_for('web.profile', user_id=user['id']))
-                    else:
-                        return render_template('pages/search.html', error="Usuario no encontrado")
+                # Buscar usuario por identificador usando función centralizada
+                user_info = searcher.find_user_by_identifier(search_term)
+                
+                if user_info:
+                    user_uuid = user_info['id']
+                    return redirect(url_for('web.profile', user_id=user_uuid))
                 else:
-                    return render_template('pages/search.html', error="Por favor ingresa al menos 2 caracteres")
+                    # También buscar por nombre/username
+                    search_results = searcher.search_users_by_query(search_term)
+                    if search_results:
+                        return render_template('pages/search.html', 
+                                           usuarios=search_results)
+                    return render_template('pages/search.html', 
+                                         error="Usuario no encontrado")
             except Exception as e:
                 logger.error(f"Error en búsqueda: {str(e)}")
                 return render_template('pages/search.html', error="Error al buscar usuario")
@@ -894,33 +857,21 @@ def auth_callback_js():
                 user = user_response.user
                 logger.info(f"Usuario autenticado vía JS: {user.email}")
                 
-                # Verificar/registrar en info_contacto
-                contact_response = db.client.table('info_contacto')\
-                    .select('id')\
-                    .eq('usuario_id', str(user.id))\
-                    .execute()
+                # Usar la clase GoogleOAuth para manejar el usuario
+                oauth_handler = AuthManager.get_google_oauth()
+                user_db_id = oauth_handler._create_or_update_user(user)
                 
-                if not contact_response.data:
-                    contact_data = {
-                        'usuario_id': str(user.id),
-                        'nombre': user.user_metadata.get('full_name', ''),
-                        'email': user.email,
-                        'telefono': user.user_metadata.get('phone', ''),
-                        'created_at': datetime.utcnow().isoformat()
-                    }
-                    db.client.table('info_contacto').insert(contact_data).execute()
+                # Crear sesión usando el método de OAuth
+                oauth_handler._create_session(user, user_db_id, None)
                 
-                # Guardar en sesión de Flask
-                session['user_id'] = str(user.id)
-                session['email'] = user.email
-                session['user_name'] = user.user_metadata.get('full_name', user.email)
+                # Almacenar tokens
                 session['access_token'] = access_token
                 if refresh_token:
                     session['refresh_token'] = refresh_token
                 
                 return jsonify({
                     "success": True,
-                    "redirect_url": "/"
+                    "redirect_url": f"/profile/{user_db_id}"
                 })
             else:
                 return jsonify({

@@ -311,23 +311,28 @@ async function loadTabData(tabName) {
         if (result.success && result.data) {
             const data = result.data;
             
-            // Store user ID globally for profile navigation
+            // Store user ID globally for profile navigation - usar UUID completo
             if (tabName === 'usuarios' && data.id) {
-                window.currentUserId = data.id || data.auth_user_id;
+                window.currentUserId = data.id;
+                console.log('Usuario UUID completo cargado:', window.currentUserId);
+            } else if (tabName === 'usuarios' && result.usuario && result.usuario.id) {
+                // Fallback si viene en estructura diferente
+                window.currentUserId = result.usuario.id;
+                console.log('Usuario UUID completo cargado (fallback):', window.currentUserId);
             }
             
             // Populate form fields based on tab
             if (tabName === 'usuarios') {
-                if (data.username) document.getElementById('usuarios-username').value = data.username;
-                if (data.role) document.getElementById('usuarios-role').value = data.role;
+                if (data.username) document.getElementById('usuarios-username').value = data.username || '';
+                if (data.role) document.getElementById('usuarios-role').value = data.role || '';
             } else if (tabName === 'info_contacto') {
-                if (data.nombre_completo) document.getElementById('contacto-nombre_completo').value = data.nombre_completo;
-                if (data.nombre_empresa) document.getElementById('contacto-nombre_empresa').value = data.nombre_empresa;
-                if (data.correo_principal) document.getElementById('contacto-correo_principal').value = data.correo_principal;
-                if (data.telefono_principal) document.getElementById('contacto-telefono_principal').value = data.telefono_principal;
-                if (data.direccion) document.getElementById('contacto-direccion').value = data.direccion;
-                if (data.comuna) document.getElementById('contacto-comuna').value = data.comuna;
-                if (data.region) document.getElementById('contacto-region').value = data.region;
+                if (data.nombre_completo) document.getElementById('contacto-nombre_completo').value = data.nombre_completo || '';
+                if (data.nombre_empresa) document.getElementById('contacto-nombre_empresa').value = data.nombre_empresa || '';
+                if (data.correo_principal) document.getElementById('contacto-correo_principal').value = data.correo_principal || '';
+                if (data.direccion) document.getElementById('contacto-direccion').value = data.direccion || '';
+                if (data.comuna) document.getElementById('contacto-comuna').value = data.comuna || '';
+                if (data.region) document.getElementById('contacto-region').value = data.region || '';
+                if (data.telefono_principal) document.getElementById('contacto-telefono_principal').value = data.telefono_principal || '';
             } else if (tabName === 'ubicaciones') {
                 // For ubicaciones, show current location if exists
                 if (Array.isArray(data) && data.length > 0) {
@@ -351,10 +356,25 @@ async function submitForm(event, tableName) {
     const formData = new FormData(form);
     const data = {};
     
-    // Convert FormData to object
+    // Convertir FormData a objeto - incluir TODOS los campos, incluso vacíos
     for (let [key, value] of formData.entries()) {
-        data[key] = value;
+        data[key] = value.trim();
     }
+    
+    // Si no hay ningún campo, mostrar advertencia
+    if (Object.keys(data).length === 0) {
+        showToast('warning', 'No hay campos en el formulario');
+        return;
+    }
+    
+    // Verificar que al menos un campo tenga contenido
+    const hasContent = Object.values(data).some(val => val && val.trim() !== '');
+    if (!hasContent) {
+        showToast('warning', 'Por favor ingresa al menos un valor');
+        return;
+    }
+    
+    console.log('Enviando datos:', data);
     
     try {
         const response = await fetch(`/api/edit/${tableName}`, {
@@ -372,9 +392,29 @@ async function submitForm(event, tableName) {
             
             // Redirigir al perfil después de 2 segundos
             setTimeout(() => {
-                // Usar el ID del usuario desde la respuesta de éxito
-                const userId = result.data.id || result.data.auth_user_id;
-                window.location.href = `/profile/${userId}`;
+                // Usar SIEMPRE el UUID completo del usuario autenticado
+                const userId = window.currentUserId;
+                if (userId && userId !== 'undefined' && userId !== 'null') {
+                    const fullProfileUrl = `/profile/${userId}`;
+                    console.log('Redirigiendo a perfil:', fullProfileUrl);
+                    window.location.href = fullProfileUrl;
+                } else {
+                    console.error('No se pudo obtener el UUID del usuario');
+                    // Fallback: usar el UUID que viene en la respuesta
+                    if (result.user_id) {
+                        window.location.href = `/profile/${result.user_id}`;
+                    } else if (result.id) {
+                        window.location.href = `/profile/${result.id}`;
+                    } else {
+                        // Último fallback: obtener desde localStorage o session
+                        const storedUserId = localStorage.getItem('currentUserId') || sessionStorage.getItem('currentUserId');
+                        if (storedUserId) {
+                            window.location.href = `/profile/${storedUserId}`;
+                        } else {
+                            console.error('No hay UUID disponible para redirección');
+                        }
+                    }
+                }
             }, 2000);
         } else {
             showToast('error', result.error || 'Error al actualizar');
@@ -498,21 +538,13 @@ function showToast(message, type = 'info') {
     }, 5000);
 }
 
-// Navigate to profile page
+// Navigate to profile using already loaded user ID
 function goToProfile() {
-    fetch('/api/data/usuarios')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success && data.data) {
-                const userId = data.data.id || data.data.auth_user_id;
-                window.location.href = `/profile/${userId}`;
-            } else {
-                window.location.href = '/profile';
-            }
-        })
-        .catch(() => {
-            window.location.href = '/profile';
-        });
+    if (window.currentUserId) {
+        window.location.href = `/profile/${window.currentUserId}`;
+    } else {
+        window.location.href = '/profile';
+    }
 }
 
 // Navigate to profile using already loaded user ID
