@@ -117,7 +117,7 @@ La aplicación estará disponible en `http://localhost:3000`
 ## 🏗️ Estructura del Proyecto Actualizada
 
 ```
-MeliAPP_v2/
+MeliAPP_v3/
 ├── app.py                          # Aplicación principal Flask
 ├── auth_manager.py                 # Gestión centralizada de autenticación
 ├── supabase_client.py             # Cliente Supabase singleton
@@ -242,7 +242,7 @@ Werkzeug==2.3.7
 ```bash
 # Instalación
 git clone [repo-url]
-cd MeliAPP_v2
+cd MeliAPP_v3
 pip install -r requirements.txt
 
 # Variables de entorno

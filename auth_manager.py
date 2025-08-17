@@ -124,31 +124,43 @@ class GoogleOAuth:
     
     def _create_or_update_user(self, user):
         """Crea o actualiza usuario en la base de datos"""
-        # Buscar usuario existente
-        user_check = db.client.table('usuarios').select('id').eq('auth_user_id', user.id).execute()
-        
-        if user_check.data and len(user_check.data) > 0:
-            # Usuario existente
-            user_db_id = user_check.data[0]['id']
-            logger.info(f"Usuario existente encontrado: {user.email}")
-        else:
-            # Crear nuevo usuario
-            new_user = {
-                'username': user.email,
-                'auth_user_id': user.id,
-                'tipo_usuario': 'apicultor',
-                'role': 'Apicultor',
-                'status': 'active',
-                'activo': True
-            }
-            insert_result = db.client.table('usuarios').insert(new_user).execute()
-            user_db_id = insert_result.data[0]['id']
-            logger.info(f"Nuevo usuario creado: {user.email}")
+        try:
+            # Buscar usuario existente
+            user_check = db.client.table('usuarios').select('id').eq('auth_user_id', user.id).execute()
             
-            # Crear info de contacto básica
-            self._create_contact_info(user_db_id, user)
-        
-        return user_db_id
+            if user_check.data and len(user_check.data) > 0:
+                # Usuario existente
+                user_db_id = user_check.data[0]['id']
+                logger.info(f"Usuario existente encontrado: {user.email}")
+            else:
+                # Crear nuevo usuario - usar el cliente con autenticación del usuario
+                new_user = {
+                    'username': user.email,
+                    'auth_user_id': user.id,
+                    'tipo_usuario': 'apicultor',
+                    'role': 'Apicultor',
+                    'status': 'active',
+                    'activo': True
+                }
+                
+                # Usar el cliente autenticado para insertar
+                insert_result = db.client.table('usuarios').insert(new_user).execute()
+                
+                if insert_result.data and len(insert_result.data) > 0:
+                    user_db_id = insert_result.data[0]['id']
+                    logger.info(f"Nuevo usuario creado: {user.email}")
+                    
+                    # Crear info de contacto básica
+                    self._create_contact_info(user_db_id, user)
+                else:
+                    logger.error("No se pudo crear el usuario")
+                    raise Exception("Error al crear usuario")
+            
+            return user_db_id
+            
+        except Exception as e:
+            logger.error(f"Error en _create_or_update_user: {str(e)}")
+            raise
     
     def _create_contact_info(self, user_db_id, user):
         """Crea información de contacto básica para nuevo usuario"""
@@ -336,14 +348,36 @@ class AuthManager:
             user_mapping = db.client.table('usuarios')\
                 .select('id')\
                 .eq('auth_user_id', user.id)\
-                .single()\
+                .limit(1)\
                 .execute()
             
-            if user_mapping.data:
-                user_uuid = user_mapping.data['id']
+            if user_mapping.data and len(user_mapping.data) > 0:
+                user_uuid = user_mapping.data[0]['id']
             else:
-                # Si no existe en usuarios, usar el auth_user_id como fallback
-                user_uuid = str(user.id)
+                # Si no existe en usuarios, crear uno nuevo
+                new_user = {
+                    'username': user.email,
+                    'auth_user_id': user.id,
+                    'tipo_usuario': 'apicultor',
+                    'role': 'Apicultor',
+                    'status': 'active',
+                    'activo': True
+                }
+                insert_result = db.client.table('usuarios').insert(new_user).execute()
+                if insert_result.data:
+                    user_uuid = insert_result.data[0]['id']
+                    
+                    # Crear info de contacto básica
+                    try:
+                        db.client.table('info_contacto').insert({
+                            'usuario_id': user_uuid,
+                            'nombre_completo': user.user_metadata.get('full_name', ''),
+                            'correo_principal': user.email
+                        }).execute()
+                    except Exception as e:
+                        logger.warning(f"Error creando info_contacto: {str(e)}")
+                else:
+                    user_uuid = str(user.id)
             
             # Crear sesión de usuario
             session['user_id'] = user_uuid  # ID de la tabla usuarios
