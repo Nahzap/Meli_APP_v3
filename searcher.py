@@ -478,10 +478,10 @@ class Searcher:
                 if user_response.data:
                     return user_response.data[0]
                     
-            # Buscar por segmento de UUID - usar auth_user_id
+            # Buscar por segmento de UUID - convertir a texto para usar LIKE
             segment = self.get_uuid_segment(user_identifier)
             if segment and len(segment) >= 4:
-                segment_response = self.supabase.table('usuarios').select('*').filter('auth_user_id', 'like', f'{segment}%').execute()
+                segment_response = self.supabase.table('usuarios').select('*').filter('auth_user_id::text', 'like', f'{segment}%').execute()
                 if segment_response.data:
                     return segment_response.data[0]
                     
