@@ -15,14 +15,21 @@ logging.getLogger('hpack').setLevel(logging.WARNING)
 logging.getLogger('httpcore').setLevel(logging.WARNING)
 logging.getLogger('httpx').setLevel(logging.WARNING)
 
-# Configuración de logging detallado para debug
+# Configuración de logging para producción (sin archivo)
+handlers = [logging.StreamHandler()]
+
+# Solo agregar FileHandler en desarrollo local
+if os.getenv('VERCEL') != '1' and os.path.exists('.'):
+    try:
+        handlers.append(logging.FileHandler('meliapp_debug.log', encoding='utf-8'))
+    except (OSError, PermissionError):
+        # Ignorar si no se puede crear el archivo
+        pass
+
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('meliapp_debug.log', encoding='utf-8')
-    ]
+    handlers=handlers
 )
 logger = logging.getLogger(__name__)
 

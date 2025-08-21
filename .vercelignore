@@ -31,9 +31,7 @@ Thumbs.db
 .git/
 .gitignore
 
-# Documentation - allow clases.csv but exclude other docs
-docs/*.md
-docs/README.md
+# Documentation - allow clases.csv and README.md
 docs/OBJ_*.md
 
 # Test files
@@ -41,3 +39,7 @@ test/
 tests/
 *_test.py
 test_*.py
+
+# Log files
+*.log
+meliapp_debug.log

@@ -2,7 +2,7 @@
 
 ## 📋 Descripción General
 
-MeliAPP v3 es una plataforma web integral para la gestión de operaciones apícolas, construida con Flask y Supabase. Incluye gestión de usuarios, búsquedas avanzadas, generación de QR codes, y un sistema completo de clasificación botánica.
+MeliAPP v3 es una plataforma web integral para la gestión de operaciones apícolas, construida con Flask y Supabase. Incluye gestión de usuarios con confirmación por email, búsquedas avanzadas, generación de QR codes, sistema completo de clasificación botánica, y gestión de lotes de miel con carrusel interactivo.
 
 ## 🏗️ Arquitectura del Sistema
 
@@ -20,8 +20,9 @@ MeliAPP v3 es una plataforma web integral para la gestión de operaciones apíco
 ```
 MeliAPP_v2/
 ├── app.py                          # Aplicación principal Flask
-├── auth_manager.py                 # Gestión centralizada de autenticación
-├── supabase_client.py             # Cliente Supabase singleton
+├── auth_manager.py                 # Gestión centralizada de autenticación + confirmación email
+├── auth_manager_routes.py          # Rutas de autenticación separadas
+├── supabase_client.py             # Cliente Supabase singleton + service role
 ├── searcher.py                    # Búsqueda avanzada multi-tabla
 ├── botanical_chart.py             # Sistema de clasificación botánica
 ├── data_tables_supabase.py        # Operaciones de tablas y serialización
