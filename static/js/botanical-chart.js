@@ -7,6 +7,11 @@ class BotanicalChart {
         this.container = document.getElementById(containerId);
         this.comuna = null;
         this.data = null;
+        this.compositionData = null;
+        this.isLoadingComposition = false;
+        
+        // Store global reference for lot buttons to access
+        window.botanicalChartInstance = this;
     }
 
     async loadData(comuna) {
@@ -75,13 +80,12 @@ class BotanicalChart {
                             <h4 class="font-bold text-sm" style="color: ${cls.color};">${cls.titulo}</h4>
                             <p class="text-xs text-gray-600">${cls.cantidad} especies</p>
                         </div>
+                        ${this.isLoadingComposition ? `<div class="loading-spinner w-4 h-4 border-2 border-gray-300 border-t-${cls.color.replace('#', '')} rounded-full animate-spin"></div>` : ''}
                     </div>
 
                     <!-- Lista completa de especies sin truncar -->
                     <div class="species-full-list space-y-1">
-                        ${cls.especies.map(specie => 
-                            `<span class="species-full-item block text-xs py-0.5 px-1 rounded-sm" style="background-color: ${cls.color}10; color: ${cls.color};">${specie}</span>`
-                        ).join('')}
+                        ${cls.especies.map(specie => this.renderSpeciesWithPercentage(specie, cls.color)).join('')}
                     </div>
                 </div>
             `).join('');
@@ -100,6 +104,9 @@ class BotanicalChart {
                 <div class="botanical-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     ${classesHtml}
                 </div>
+                
+                <!-- Total accumulation display -->
+                ${this.renderTotalAccumulation()}
             `;
         }
 
@@ -144,6 +151,60 @@ class BotanicalChart {
     // Método para actualizar automáticamente cuando cambia la comuna
     updateCommune(newCommune) {
         this.loadData(newCommune);
+    }
+
+    // Método para actualizar con datos de composición polínica
+    updateWithComposition(compositionData) {
+        console.log('🌿 Updating botanical chart with composition:', compositionData);
+        this.compositionData = compositionData;
+        this.isLoadingComposition = false;
+        this.render(); // Re-render with composition data
+    }
+
+    // Método para mostrar estado de carga
+    setLoadingComposition(loading) {
+        this.isLoadingComposition = loading;
+        this.render();
+    }
+
+    // Renderizar especie con barra de porcentaje
+    renderSpeciesWithPercentage(specie, color) {
+        const percentage = this.compositionData ? this.compositionData[specie] : null;
+        
+        if (percentage !== null && percentage !== undefined) {
+            return `
+                <div class="species-full-item block text-xs py-1 px-1 rounded-sm" style="background-color: ${color}10; color: ${color};">
+                    <div class="flex items-center justify-between mb-1">
+                        <span>${specie}</span>
+                        <span class="font-bold">${percentage.toFixed(2)}%</span>
+                    </div>
+                    <div class="w-full bg-gray-200 rounded-full h-1.5">
+                        <div class="h-1.5 rounded-full transition-all duration-500" 
+                             style="width: ${percentage}%; background-color: ${color};"></div>
+                    </div>
+                </div>
+            `;
+        } else {
+            return `<span class="species-full-item block text-xs py-0.5 px-1 rounded-sm" style="background-color: ${color}10; color: ${color};">${specie}</span>`;
+        }
+    }
+
+    // Renderizar acumulación total
+    renderTotalAccumulation() {
+        if (!this.compositionData) return '';
+        
+        const total = Object.values(this.compositionData).reduce((sum, val) => sum + val, 0);
+        const speciesCount = Object.keys(this.compositionData).length;
+        
+        return `
+            <div class="absolute bottom-4 right-4 bg-white rounded-lg shadow-lg p-3 border-l-4 border-green-500">
+                <div class="text-xs text-gray-600 mb-1">Composición Total</div>
+                <div class="flex items-center gap-2">
+                    <div class="text-lg font-bold text-green-600">${total.toFixed(2)}%</div>
+                    <div class="text-xs text-gray-500">${speciesCount} especies</div>
+                </div>
+            </div>
+        `;
     }
 }
 

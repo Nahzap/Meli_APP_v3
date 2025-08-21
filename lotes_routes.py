@@ -19,6 +19,29 @@ from datetime import datetime
 db_client = SupabaseClient()
 logger = logging.getLogger(__name__)
 
+# Cache simple para composiciones de lotes
+_composition_cache = {}
+
+# Cliente autenticado singleton para evitar múltiples autenticaciones
+_authenticated_client = None
+
+def get_singleton_authenticated_client():
+    """Obtiene un cliente autenticado singleton para evitar múltiples autenticaciones."""
+    global _authenticated_client
+    
+    if _authenticated_client is None:
+        logger.info("🔐 Creando cliente autenticado singleton")
+        db_modifier_instance = DatabaseModifier()
+        _authenticated_client = db_modifier_instance.get_authenticated_client()
+        
+        if not _authenticated_client:
+            logger.error("❌ No se pudo crear cliente autenticado singleton")
+            return None
+        
+        logger.info("✅ Cliente autenticado singleton creado exitosamente")
+    
+    return _authenticated_client
+
 # Crear blueprints para rutas de lotes
 lotes_api_bp = Blueprint('lotes_api', __name__, url_prefix='/api')
 lotes_web_bp = Blueprint('lotes_web', __name__)
@@ -65,6 +88,63 @@ def obtener_lote(lote_id):
             
     except Exception as e:
         logger.error(f"Error al obtener lote {lote_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Error interno del servidor'
+        }), 500
+
+@lotes_api_bp.route('/lote/composicion/<lote_id>', methods=['GET'])
+def obtener_composicion_lote(lote_id):
+    """
+    Endpoint para obtener la composición botánica de un lote específico.
+    
+    GET /api/lote/composicion/<lote_id>
+    """
+    try:
+        logger.info(f"🌿 Obteniendo composición para el lote ID: {lote_id}")
+        
+        # Verificar cache primero
+        if lote_id in _composition_cache:
+            logger.info(f"📋 Composición obtenida desde cache para {lote_id}")
+            return jsonify({
+                'success': True,
+                'lote_id': lote_id,
+                'composicion': _composition_cache[lote_id]
+            })
+        
+        # Usar cliente autenticado singleton para evitar múltiples autenticaciones
+        auth_client = get_singleton_authenticated_client()
+        
+        if not auth_client:
+            logger.error("No se pudo obtener cliente autenticado para obtener composición")
+            return jsonify({
+                'success': False,
+                'error': 'Error de autenticación'
+            }), 401
+            
+        response = auth_client.table('origenes_botanicos').select('composicion').eq('id', lote_id).execute()
+        
+        if response.data and len(response.data) > 0:
+            composicion = response.data[0].get('composicion')
+            
+            # Guardar en cache
+            _composition_cache[lote_id] = composicion
+            
+            logger.info(f"🌿 Composición encontrada para el lote {lote_id}: {composicion}")
+            return jsonify({
+                'success': True,
+                'lote_id': lote_id,
+                'composicion': composicion
+            })
+        else:
+            logger.warning(f"No se encontró composición para el lote con ID {lote_id}")
+            return jsonify({
+                'success': False,
+                'error': 'Lote no encontrado o sin composición'
+            }), 404
+            
+    except Exception as e:
+        logger.error(f"Error al obtener composición del lote {lote_id}: {str(e)}")
         return jsonify({
             'success': False,
             'error': 'Error interno del servidor'

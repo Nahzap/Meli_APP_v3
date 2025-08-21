@@ -257,7 +257,7 @@
                     <div class="flex items-center space-x-2 composicion-fila">
                         <select class="composicion-tipo form-input flex-1" id="especies-zona">
                             <option value="">Cargando especies de tu zona...</option>
-                            <option value="Otras Especies">🌿 Otras Especies (Origen no certificado)</option>
+                            <option value="Otras Especies">🌿 Otras Especies </option>
                         </select>
                         <input type="number" class="composicion-porcentaje form-input w-24" 
                                placeholder="%" min="0" max="100" step="1">
@@ -693,7 +693,8 @@ class LoteManager {
                         this.resetForm();
                     } else {
                         this.loteIdSpan.textContent = result.loteId;
-                        document.getElementById('lote-orden').textContent = result.data?.orden_miel || 'N/A';
+                        // Mostrar el UUID completo como orden para que el apicultor vea que es serio
+                        document.getElementById('lote-orden').textContent = result.loteId || 'N/A';
                         this.resultContainer.style.display = 'block';
                         this.form.style.display = 'none';
                     }
