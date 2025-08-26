@@ -154,13 +154,13 @@
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="form-group">
-                    <label class="form-label" for="nombre_miel">Nombre de la Miel</label>
+                    <label class="form-label" for="nombre_miel">Nombre de Lote</label>
                     <input type="text" id="nombre_miel" name="nombre_miel" class="form-input" 
-                           placeholder="Ej: Miel de Ulmo Primavera" required>
+                           placeholder="Ej: Miel de Ulmo" required>
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Temporadas de Cosecha</label>
+                    <label class="form-label">Temporada de cosecha para lote a registrar</label>
                     <div class="temporadas-container bg-gray-50 p-4 rounded-lg border">
                         <div class="space-y-3 mb-4">
                             <label class="flex items-center space-x-3 cursor-pointer hover:bg-gray-100 p-2 rounded">
@@ -181,7 +181,7 @@
                             </label>
                         </div>
                         <div class="form-group">
-                            <label class="form-label" for="anio_cosecha">Año de Cosecha</label>
+                            <label class="form-label" for="anio_cosecha">Año de cosecha para lote a registrar</label>
                             <select id="anio_cosecha" name="anio_cosecha" class="form-input" required>
                                 <option value="">Selecciona año</option>
                             </select>
@@ -192,7 +192,7 @@
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="form-group">
-                    <label class="form-label" for="orden_miel">Número de Orden</label>
+                    <label class="form-label" for="orden_miel">Orden de producción</label>
                     <input type="number" id="orden_miel" name="orden_miel" class="form-input" 
                            placeholder="Ej: 1" min="1" max="9999" 
                            step="1" required>
@@ -208,7 +208,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Fecha de Registro</label>
+                    <label class="form-label">Fecha de Registro - Sólo 1 vez para 1er registro de orígen botánico.</label>
                     <div class="date-picker-container">
                         <div class="grid grid-cols-3 gap-2">
                             <div>
@@ -558,7 +558,7 @@ class LoteManager {
             // Agregar "Otras Especies"
             const otrasOption = document.createElement('option');
             otrasOption.value = 'Otras Especies';
-            otrasOption.textContent = '🌿 Otras Especies (Origen no certificado)';
+            otrasOption.textContent = '🌿 Otras Especies';
             if ('Otras Especies' === currentValue) otrasOption.selected = true;
             select.appendChild(otrasOption);
         });

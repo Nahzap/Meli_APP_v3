@@ -57,107 +57,120 @@ def edit_usuarios():
         logger.error(f"Error editando usuario: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
-@edit_bp.route('/api/edit/ubicaciones', methods=['POST'])
+@edit_bp.route('/api/edit/ubicaciones', methods=['POST', 'PUT', 'DELETE'])
 @AuthManager.login_required
-def edit_ubicaciones():
-    """Editar ubicaciones con conversión automática de Plus Code y debug exhaustivo"""
+def handle_ubicaciones():
+    """Manejar operaciones CRUD para ubicaciones con conversión automática de Plus Code"""
     try:
-        logger.info("🗺️ [UBICACIONES] ===== INICIANDO PROCESO DE EDICIÓN =====")
+        method = request.method
+        logger.info(f"🗺️ [UBICACIONES] ===== INICIANDO {method} =====")
         
-        # DEBUG: Mostrar todos los headers y datos recibidos
-        logger.info(f"🗺️ [UBICACIONES] Headers: {dict(request.headers)}")
-        logger.info(f"🗺️ [UBICACIONES] Método: {request.method}")
-        logger.info(f"🗺️ [UBICACIONES] Content-Type: {request.headers.get('Content-Type')}")
+        user_uuid = g.user.get('id')
+        if not user_uuid:
+            return jsonify({"success": False, "error": "Usuario no autenticado"}), 401
         
-        data = request.get_json()
-        logger.info(f"🗺️ [UBICACIONES] 📦 Datos RAW recibidos: {data}")
-        logger.info(f"🗺️ [UBICACIONES] 📦 Tipo de datos: {type(data)}")
-        logger.info(f"🗺️ [UBICACIONES] 📦 Keys disponibles: {list(data.keys()) if data else 'None'}")
-        
-        if not data:
-            logger.error("🗺️ [UBICACIONES] ❌ No se recibieron datos JSON")
-            return jsonify({"success": False, "error": "No se recibieron datos"}), 400
-        
-        # Importar el conversor de Plus Code
-        from gmaps_utils import process_ubicacion_data
-        logger.info("🗺️ [UBICACIONES] 📥 Importando gmaps_utils...")
-        
-        # DEBUG: Mostrar datos antes del procesamiento
-        logger.info(f"🗺️ [UBICACIONES] 🔍 Datos ANTES de procesamiento:")
-        for key, value in data.items():
-            logger.info(f"  {key}: {value} ({type(value)})")
-        
-        # Procesar datos incluyendo conversión de Plus Code
-        logger.info("🗺️ [UBICACIONES] ⚙️ Iniciando procesamiento con gmaps_utils...")
-        processed_data = process_ubicacion_data(data)
-        
-        # DEBUG: Mostrar datos después del procesamiento
-        logger.info(f"🗺️ [UBICACIONES] ✨ Datos DESPUÉS de procesamiento:")
-        for key, value in processed_data.items():
-            logger.info(f"  {key}: {value} ({type(value)})")
-        
-        # Validar campos requeridos después del procesamiento
-        required_fields = ['nombre', 'latitud', 'longitud']
-        missing_fields = []
-        
-        for field in required_fields:
-            if field not in processed_data:
-                missing_fields.append(field)
-                logger.error(f"🗺️ [UBICACIONES] ❌ Campo '{field}' no existe en processed_data")
-            elif not processed_data[field]:
-                missing_fields.append(field)
-                logger.error(f"🗺️ [UBICACIONES] ❌ Campo '{field}' está vacío: {processed_data[field]}")
-            else:
-                logger.info(f"🗺️ [UBICACIONES] ✅ Campo '{field}': {processed_data[field]} ({type(processed_data[field])})")
-        
-        if missing_fields:
-            logger.error(f"🗺️ [UBICACIONES] ❌ Campos faltantes: {missing_fields}")
-            return jsonify({"success": False, "error": f"Campos requeridos: {missing_fields}"}), 400
-        
-        user_uuid = g.user['id']
-        logger.info(f"🗺️ [UBICACIONES] 👤 Usuario UUID: {user_uuid}")
-        
-        # Convertir tipos de datos
-        try:
-            lat = float(processed_data['latitud'])
-            lng = float(processed_data['longitud'])
-            logger.info(f"🗺️ [UBICACIONES] 📍 Coordenadas convertidas: lat={lat}, lng={lng}")
-        except (ValueError, TypeError) as e:
-            logger.error(f"🗺️ [UBICACIONES] ❌ Error convirtiendo coordenadas: {e}")
-            return jsonify({"success": False, "error": f"Error convirtiendo coordenadas: {e}"}), 400
-        
-        # Preparar datos para actualización
-        update_data = {
-            'nombre': str(processed_data['nombre']).strip(),
-            'latitud': lat,
-            'longitud': lng,
-            'gmaps_plus_code': str(processed_data.get('gmaps_plus_code', '')).strip(),
-            'norma_geo': str(processed_data.get('norma_geo', 'WGS84')).strip(),
-            'descripcion': str(processed_data.get('descripcion', '')).strip()
-        }
-        
-        logger.info(f"🗺️ [UBICACIONES] 📤 Datos finales para actualización: {update_data}")
-        
-        # Actualizar o insertar
-        logger.info("🗺️ [UBICACIONES] 💾 Intentando actualizar base de datos...")
-        from modify_DB import update_user_location
-        result, status_code = update_user_location(update_data, user_uuid)
-        
-        if result and isinstance(result, dict):
-            logger.info(f"🗺️ [UBICACIONES] ✅ ¡ÉXITO! Ubicación actualizada para usuario {user_uuid}")
-            # Agregar URL de perfil al resultado
-            if result.get('success', False):
-                result['profile_url'] = f"/profile/{user_uuid}"
+        if method == 'DELETE':
+            # Eliminar ubicación
+            data = request.get_json()
+            location_id = data.get('id')
+            
+            if not location_id:
+                return jsonify({"success": False, "error": "ID de ubicación requerido"}), 400
+            
+            # Verificar que la ubicación pertenece al usuario
+            ubicaciones = db_modifier.get_records('ubicaciones', user_uuid)
+            ubicacion = next((u for u in ubicaciones if u.get('id') == location_id), None)
+            
+            if not ubicacion:
+                return jsonify({"success": False, "error": "Ubicación no encontrada o no pertenece al usuario"}), 404
+            
+            result, status_code = db_modifier.delete_record('ubicaciones', user_uuid, {'id': location_id})
             return jsonify(result), status_code
-        else:
-            logger.error(f"🗺️ [UBICACIONES] ❌ Error actualizando ubicación para usuario {user_uuid}")
-            return jsonify({"success": False, "error": "Error al actualizar ubicación"}), 500
+            
+        elif method == 'POST':
+            # Crear nueva ubicación
+            data = request.get_json()
+            if not data:
+                return jsonify({"success": False, "error": "Datos requeridos"}), 400
+            
+            # Importar el conversor de Plus Code
+            from gmaps_utils import process_ubicacion_data
+            processed_data = process_ubicacion_data(data)
+            
+            # Validar campos requeridos
+            required_fields = ['nombre', 'latitud', 'longitud']
+            missing_fields = [f for f in required_fields if f not in processed_data or not processed_data[f]]
+            
+            if missing_fields:
+                return jsonify({"success": False, "error": f"Campos requeridos: {missing_fields}"}), 400
+            
+            # Preparar datos para inserción - solo columnas existentes
+            insert_data = {
+                'auth_user_id': user_uuid,
+                'nombre': str(processed_data['nombre']).strip(),
+                'latitud': float(processed_data['latitud']),
+                'longitud': float(processed_data['longitud']),
+                'norma_geo': str(processed_data.get('norma_geo', 'WGS84')).strip(),
+                'descripcion': str(processed_data.get('descripcion', '')).strip()
+            }
+            
+            result, status_code = db_modifier.insert_record('ubicaciones', insert_data, user_uuid)
+            
+            if result and isinstance(result, dict) and result.get('success'):
+                result['profile_url'] = f"/profile/{user_uuid}"
+            
+            return jsonify(result), status_code
+            
+        elif method == 'PUT':
+            # Actualizar ubicación existente
+            data = request.get_json()
+            if not data:
+                return jsonify({"success": False, "error": "Datos requeridos"}), 400
+            
+            location_id = data.get('id')
+            if not location_id:
+                return jsonify({"success": False, "error": "ID de ubicación requerido"}), 400
+            
+            # Verificar que la ubicación pertenece al usuario
+            ubicaciones = db_modifier.get_records('ubicaciones', user_uuid)
+            ubicacion = next((u for u in ubicaciones if u.get('id') == location_id), None)
+            
+            if not ubicacion:
+                return jsonify({"success": False, "error": "Ubicación no encontrada o no pertenece al usuario"}), 404
+            
+            # Importar el conversor de Plus Code
+            from gmaps_utils import process_ubicacion_data
+            processed_data = process_ubicacion_data(data)
+            
+            # Validar campos requeridos
+            required_fields = ['nombre', 'latitud', 'longitud']
+            missing_fields = [f for f in required_fields if f not in processed_data or not processed_data[f]]
+            
+            if missing_fields:
+                return jsonify({"success": False, "error": f"Campos requeridos: {missing_fields}"}), 400
+            
+            # Preparar datos para actualización - solo columnas existentes
+            update_data = {
+                'nombre': str(processed_data['nombre']).strip(),
+                'latitud': float(processed_data['latitud']),
+                'longitud': float(processed_data['longitud']),
+                'norma_geo': str(processed_data.get('norma_geo', 'WGS84')).strip(),
+                'descripcion': str(processed_data.get('descripcion', '')).strip()
+            }
+            
+            result, status_code = db_modifier.update_record('ubicaciones', update_data, user_uuid, {'id': location_id})
+            
+            if result and isinstance(result, dict) and result.get('success'):
+                result['profile_url'] = f"/profile/{user_uuid}"
+            
+            return jsonify(result), status_code
             
     except ValueError as e:
         logger.error(f"🗺️ [UBICACIONES] ❌ Error de validación: {e}")
         return jsonify({"success": False, "error": f"Formato inválido de coordenadas: {e}"}), 400
     except Exception as e:
         logger.error(f"🗺️ [UBICACIONES] 💥 Error crítico: {e}")
+        import traceback
         logger.error(f"🗺️ [UBICACIONES] 💥 Traceback: {traceback.format_exc()}")
         return jsonify({"success": False, "error": str(e)}), 500
 

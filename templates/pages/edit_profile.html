@@ -197,67 +197,125 @@
                     
                     <!-- Instrucciones -->
                     <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                        <div class="flex items-start">
-                            <i class="fas fa-info-circle text-blue-500 mt-1 mr-3"></i>
+                        <div class="flex items-center justify-between">
                             <div>
-                                <h4 class="font-medium text-blue-900 mb-2">Formato Requerido:</h4>
-                                <p class="text-sm text-blue-800">
-                                    <strong>SOLO PLUS CODE de Google Maps:</strong> CVV6+HJ7 Pichipehuenco, Lonquimay
-                                </p>
-                                <p class="text-xs text-blue-700 mt-2">
-                                    Obtén el PLUS CODE desde Google Maps → Compartir → Copiar código plus
-                                </p>
+                                <h3 class="text-lg font-semibold text-gray-900 mb-2">Mis Ubicaciones</h3>
+                                <p class="text-sm text-gray-600">Gestiona tus ubicaciones de colmenares</p>
+                            </div>
+                            <div class="flex space-x-3">
+                                <button onclick="showAddLocationForm()" class="bg-amber-600 text-white px-4 py-2 rounded-md hover:bg-amber-700">
+                                    <i class="fas fa-plus mr-2"></i>Nueva Ubicación
+                                </button>
+                                <button onclick="showDeleteLocationForm()" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700">
+                                    <i class="fas fa-trash mr-2"></i>Eliminar Ubicación
+                                </button>
                             </div>
                         </div>
                     </div>
                     
-                    <form onsubmit="submitUbicacionForm(event)" class="space-y-6">
-                        <!-- Plus Code Input -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Plus Code de Google Maps *</label>
-                            <input type="text" 
-                                   name="gmaps_plus_code"
-                                   id="gmaps-plus-code"
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                                   placeholder="6RXC+Q7C Colluqueo, Lonquimay"
-                                   required>
-                            <p class="text-xs text-gray-500 mt-1">Pega el código plus de Google Maps → Compartir → Copiar código plus</p>
+                    <!-- Lista de ubicaciones existentes -->
+                    <div id="ubicaciones-list" class="mb-6">
+                        <div class="text-center py-8 text-gray-500">
+                            <i class="fas fa-map-marker-alt text-4xl mb-2"></i>
+                            <p>Cargando ubicaciones...</p>
+                        </div>
+                    </div>
+                                       
+                    <!-- Formulario para agregar/editar ubicación -->
+                    <div id="ubicacion-form-container" class="hidden bg-gray-50 p-6 rounded-lg">
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 id="ubicacion-form-title" class="text-md font-semibold">Agregar Nueva Ubicación</h4>
+                            <button onclick="hideAddLocationForm()" class="text-gray-500 hover:text-gray-700">
+                                <i class="fas fa-times"></i>
+                            </button>
                         </div>
                         
-                        <!-- Nombre de la ubicación -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Nombre de la ubicación *</label>
-                            <input type="text" 
-                                   name="nombre" 
-                                   id="ubicaciones-nombre" 
-                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                                   placeholder="Colmenar Principal - Colluqueo, Lonquimay"
-                                   required>
+                        <form id="ubicacion-form" class="space-y-6">
+                            <input type="hidden" name="id" id="ubicaciones-id">
+                            
+                            <!-- Plus Code -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Google Maps Plus Code *</label>
+                                <input type="text" 
+                                       name="gmaps_plus_code" 
+                                       id="ubicaciones-gmaps_plus_code" 
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                                       placeholder="6RXC+Q7C Colluqueo, Lonquimay"
+                                       required>
+                                <p class="text-xs text-gray-500 mt-1">Ejemplo: 6RXC+Q7C Colluqueo, Lonquimay</p>
+                            </div>
+                            
+                            <!-- Nombre de ubicación -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Nombre de la ubicación *</label>
+                                <input type="text" 
+                                       name="nombre" 
+                                       id="ubicaciones-nombre" 
+                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                                       placeholder="Colmenar Principal - Colluqueo, Lonquimay"
+                                       required>
+                            </div>
+                            
+                            <!-- Latitud (oculto) -->
+                            <input type="hidden" name="latitud" id="ubicaciones-latitud">
+                            
+                            <!-- Longitud (oculto) -->
+                            <input type="hidden" name="longitud" id="ubicaciones-longitud">
+                            
+                            <!-- Descripción -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Descripción</label>
+                                <textarea name="descripcion" 
+                                          id="ubicaciones-descripcion" 
+                                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                                          placeholder="Descripción adicional de la ubicación"
+                                          rows="3"></textarea>
+                            </div>
+                            
+                            <div class="flex space-x-3">
+                                <button type="submit" 
+                                        onclick="submitUbicacionForm(event)" 
+                                        class="flex-1 bg-amber-600 text-white py-2 px-4 rounded-md hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2">
+                                    <i class="fas fa-save mr-2"></i><span id="ubicacion-submit-text">Guardar Ubicación</span>
+                                </button>
+                                <button type="button" 
+                                        onclick="hideAddLocationForm()" 
+                                        class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                                    Cancelar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <!-- Formulario para eliminar ubicación -->
+                    <div id="delete-location-form-container" class="hidden bg-red-50 p-6 rounded-lg border border-red-200">
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="text-md font-semibold text-red-800">Eliminar Ubicación</h4>
+                            <button onclick="hideDeleteLocationForm()" class="text-gray-500 hover:text-gray-700">
+                                <i class="fas fa-times"></i>
+                            </button>
                         </div>
                         
-                        <!-- Latitud (oculto) -->
-                        <input type="hidden" name="latitud" id="ubicaciones-latitud">
-                        
-                        <!-- Longitud (oculto) -->
-                        <input type="hidden" name="longitud" id="ubicaciones-longitud">
-                        
-                        <!-- Descripción -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Descripción</label>
-                            <textarea name="descripcion" 
-                                      id="ubicaciones-descripcion" 
-                                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                                      placeholder="Descripción adicional de la ubicación"
-                                      rows="3"></textarea>
+                        <div class="mb-4">
+                            <p class="text-sm text-red-600 mb-4">Selecciona la ubicación que deseas eliminar. Esta acción no se puede deshacer.</p>
+                            <select id="delete-location-select" class="w-full px-3 py-2 border border-red-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500">
+                                <option value="">Selecciona una ubicación...</option>
+                            </select>
                         </div>
                         
-                        <!-- Norma Geo (oculto) -->
-                        <input type="hidden" name="norma_geo" value="WGS84">
-                        
-                        <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-medium py-3 px-4 rounded-lg transition-colors">
-                            <i class="fas fa-map-marker-alt mr-2"></i>Actualizar Ubicación
-                        </button>
-                    </form>
+                        <div class="flex justify-end space-x-3">
+                            <button type="button" 
+                                    onclick="confirmDeleteLocation()" 
+                                    class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50">
+                                <i class="fas fa-trash mr-2"></i>Eliminar
+                            </button>
+                            <button type="button" 
+                                    onclick="hideDeleteLocationForm()" 
+                                    class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -308,7 +366,7 @@ async function loadTabData(tabName) {
         const response = await fetch(`/api/data/${tabName}`);
         const result = await response.json();
         
-        if (result.success && result.data) {
+        if (result.success) {
             const data = result.data;
             
             // Store user ID globally for profile navigation - usar UUID completo
@@ -334,13 +392,8 @@ async function loadTabData(tabName) {
                 if (data.region) document.getElementById('contacto-region').value = data.region || '';
                 if (data.telefono_principal) document.getElementById('contacto-telefono_principal').value = data.telefono_principal || '';
             } else if (tabName === 'ubicaciones') {
-                // For ubicaciones, show current location if exists
-                if (Array.isArray(data) && data.length > 0) {
-                    const ubicacion = data[0];
-                    if (ubicacion.nombre) {
-                        document.getElementById('ubicaciones-ubicacion').placeholder = `Actual: ${ubicacion.nombre}`;
-                    }
-                }
+                // Display all locations - usar result.ubicaciones en lugar de data
+                displayUbicaciones(result.ubicaciones || []);
             }
         }
     } catch (error) {
@@ -425,7 +478,106 @@ async function submitForm(event, tableName) {
     }
 }
 
-// Función para enviar formulario de ubicaciones
+// Funciones para gestión de ubicaciones
+function showAddLocationForm() {
+    document.getElementById('ubicacion-form-container').classList.remove('hidden');
+    document.getElementById('ubicacion-form-title').textContent = 'Agregar Nueva Ubicación';
+    document.getElementById('ubicacion-submit-text').textContent = 'Guardar Ubicación';
+    document.getElementById('ubicacion-form').reset();
+    document.getElementById('ubicaciones-id').value = '';
+}
+
+function hideAddLocationForm() {
+    document.getElementById('ubicacion-form-container').classList.add('hidden');
+    document.getElementById('ubicacion-form').reset();
+}
+
+function editUbicacion(ubicacion) {
+    document.getElementById('ubicacion-form-container').classList.remove('hidden');
+    document.getElementById('ubicacion-form-title').textContent = 'Editar Ubicación';
+    document.getElementById('ubicacion-submit-text').textContent = 'Actualizar Ubicación';
+    
+    // Llenar el formulario con los datos existentes
+    document.getElementById('ubicaciones-id').value = ubicacion.id || '';
+    document.getElementById('ubicaciones-gmaps_plus_code').value = ubicacion.gmaps_plus_code || '';
+    document.getElementById('ubicaciones-nombre').value = ubicacion.nombre || '';
+    document.getElementById('ubicaciones-latitud').value = ubicacion.latitud || '';
+    document.getElementById('ubicaciones-longitud').value = ubicacion.longitud || '';
+    document.getElementById('ubicaciones-descripcion').value = ubicacion.descripcion || '';
+}
+
+function displayUbicaciones(ubicaciones) {
+    const container = document.getElementById('ubicaciones-list');
+    
+    if (!Array.isArray(ubicaciones) || ubicaciones.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-8 text-gray-500">
+                <i class="fas fa-map-marker-alt text-4xl mb-2"></i>
+                <p>No tienes ubicaciones registradas</p>
+                <button onclick="showAddLocationForm()" class="mt-4 text-amber-600 hover:text-amber-700">
+                    <i class="fas fa-plus mr-1"></i>Agregar primera ubicación
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = ubicaciones.map(ubicacion => `
+        <div class="bg-white border border-gray-200 rounded-lg p-4 mb-4">
+            <div class="flex justify-between items-start">
+                <div class="flex-1">
+                    <h4 class="font-semibold text-gray-900">${ubicacion.nombre || 'Sin nombre'}</h4>
+                    <p class="text-sm text-gray-600 mt-1">${ubicacion.descripcion || 'Sin descripción'}</p>
+                    <div class="mt-2">
+                        <span class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">${ubicacion.gmaps_plus_code}</span>
+                        <a href="https://maps.google.com/?q=${ubicacion.latitud},${ubicacion.longitud}" 
+                           target="_blank" 
+                           class="text-xs text-amber-600 hover:text-amber-700 ml-2">
+                            <i class="fas fa-external-link-alt mr-1"></i>Ver en Maps
+                        </a>
+                    </div>
+                </div>
+                <div class="flex space-x-2 ml-4">
+                    <button onclick='editUbicacion(${JSON.stringify(ubicacion).replace(/'/g, "&apos;")})' 
+                            class="text-blue-600 hover:text-blue-800 p-1">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button onclick='deleteUbicacion("${ubicacion.id}")' 
+                            class="text-red-600 hover:text-red-800 p-1">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function deleteUbicacion(id) {
+    if (!confirm('¿Estás seguro de eliminar esta ubicación?')) return;
+    
+    try {
+        const response = await fetch('/api/edit/ubicaciones', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ id })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            showToast('Ubicación eliminada exitosamente', 'success');
+            loadTabData('ubicaciones');
+        } else {
+            showToast('Error: ' + result.error, 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error al eliminar ubicación', 'error');
+    }
+}
+
+// Función actualizada para enviar formulario de ubicaciones
 async function submitUbicacionForm(event) {
     event.preventDefault();
     
@@ -449,9 +601,12 @@ async function submitUbicacionForm(event) {
     
     console.log(' Enviando datos:', data);
     
+    // Determinar método HTTP según si es edición o creación
+    const method = data.id ? 'PUT' : 'POST';
+    
     // Enviar al backend
     fetch('/api/edit/ubicaciones', {
-        method: 'POST',
+        method: method,
         headers: {
             'Content-Type': 'application/json',
         },
@@ -462,7 +617,7 @@ async function submitUbicacionForm(event) {
         console.log(' Respuesta:', result);
         if (result.success) {
             showToast('Ubicación guardada exitosamente', 'success');
-            // Recargar datos después de guardar
+            hideAddLocationForm();
             loadTabData('ubicaciones');
             form.reset();
         } else {
@@ -538,13 +693,125 @@ function showToast(message, type = 'info') {
     }, 5000);
 }
 
-// Navigate to profile using already loaded user ID
-function goToProfile() {
-    if (window.currentUserId) {
-        window.location.href = `/profile/${window.currentUserId}`;
-    } else {
-        window.location.href = '/profile';
+// Mostrar formulario de agregar ubicación
+function showAddLocationForm() {
+    document.getElementById('ubicacion-form-container').classList.remove('hidden');
+    document.getElementById('delete-location-form-container').classList.add('hidden');
+}
+
+// Ocultar formulario de agregar ubicación
+function hideAddLocationForm() {
+    document.getElementById('ubicacion-form-container').classList.add('hidden');
+}
+
+// Mostrar formulario de eliminar ubicación
+function showDeleteLocationForm() {
+    document.getElementById('delete-location-form-container').classList.remove('hidden');
+    document.getElementById('ubicacion-form-container').classList.add('hidden');
+    loadLocationOptions();
+}
+
+// Ocultar formulario de eliminar ubicación
+function hideDeleteLocationForm() {
+    document.getElementById('delete-location-form-container').classList.add('hidden');
+}
+
+// Cargar opciones de ubicaciones para eliminar
+async function loadLocationOptions() {
+    try {
+        const response = await fetch('/api/data/ubicaciones');
+        const result = await response.json();
+        
+        const select = document.getElementById('delete-location-select');
+        select.innerHTML = '<option value="">Selecciona una ubicación...</option>';
+        
+        if (result.success && result.ubicaciones && result.ubicaciones.length > 0) {
+            result.ubicaciones.forEach(ubicacion => {
+                const option = document.createElement('option');
+                option.value = ubicacion.id;
+                option.textContent = `${ubicacion.nombre} (${ubicacion.latitud}, ${ubicacion.longitud})`;
+                select.appendChild(option);
+            });
+        } else {
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'No hay ubicaciones para eliminar';
+            option.disabled = true;
+            select.appendChild(option);
+        }
+    } catch (error) {
+        console.error('Error cargando ubicaciones:', error);
+        showToast('Error cargando ubicaciones', 'error');
     }
+}
+
+// Confirmar eliminación de ubicación
+async function confirmDeleteLocation() {
+    const select = document.getElementById('delete-location-select');
+    const locationId = select.value;
+    
+    if (!locationId) {
+        showToast('Por favor selecciona una ubicación', 'error');
+        return;
+    }
+    
+    if (!confirm('¿Estás seguro de que deseas eliminar esta ubicación? Esta acción no se puede deshacer.')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/edit/ubicaciones', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ id: locationId })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast('Ubicación eliminada correctamente', 'success');
+            hideDeleteLocationForm();
+            // Recargar la lista de ubicaciones
+            loadTabData('ubicaciones');
+        } else {
+            showToast(result.error || 'Error eliminando ubicación', 'error');
+        }
+    } catch (error) {
+        console.error('Error eliminando ubicación:', error);
+        showToast('Error eliminando ubicación', 'error');
+    }
+}
+
+// Mostrar ubicaciones en la lista
+function displayUbicaciones(ubicaciones) {
+    const container = document.getElementById('ubicaciones-list');
+    
+    if (!ubicaciones || ubicaciones.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-8 text-gray-500">
+                <i class="fas fa-map-marker-alt text-4xl mb-2"></i>
+                <p>No hay ubicaciones registradas</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = ubicaciones.map(ubicacion => `
+        <div class="bg-white border border-gray-200 rounded-lg p-4 mb-3">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h4 class="font-semibold text-gray-900">${ubicacion.nombre}</h4>
+                    <p class="text-sm text-gray-600">Lat: ${ubicacion.latitud}, Lng: ${ubicacion.longitud}</p>
+                    ${ubicacion.descripcion ? `<p class="text-sm text-gray-500 mt-1">${ubicacion.descripcion}</p>` : ''}
+                </div>
+                <div class="text-xs text-gray-400">
+                    ${ubicacion.norma_geo || 'WGS84'}
+                </div>
+            </div>
+        </div>
+    `).join('');
 }
 
 // Navigate to profile using already loaded user ID

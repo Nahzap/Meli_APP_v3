@@ -325,23 +325,7 @@ class DatabaseModifier:
         except Exception as e:
             logger.error(f"Excepción al insertar en {table}: {e}", exc_info=True)
             return {"success": False, "error": "Ocurrió un error inesperado en el servidor."}, 500
-    
-    def get_record(self, table, user_uuid, select_fields='*'):
-        """Obtener un registro de cualquier tabla"""
-        try:
-            auth_client = self.get_authenticated_client()
-            if not auth_client:
-                return []
-            
-            ref_field = 'usuario_id' if table != 'usuarios' else 'id'
-            response = auth_client.table(table).select('*').eq(ref_field, user_uuid).execute()
-            
-            return response.data if response.data else []
-            
-        except Exception as e:
-            logger.error(f"Error obteniendo registros {table}: {e}")
-            return []
-    
+
     def get_records(self, table, user_uuid, select_fields='*'):
         """Obtener múltiples registros del usuario"""
         try:
@@ -349,14 +333,30 @@ class DatabaseModifier:
             if not auth_client:
                 return []
             
-            ref_field = 'usuario_id' if table != 'usuarios' else 'id'
-            response = auth_client.table(table).select('*').eq(ref_field, user_uuid).execute()
+            ref_field = 'auth_user_id' if table != 'usuarios' else 'auth_user_id'
+            response = auth_client.table(table).select(select_fields).eq(ref_field, user_uuid).execute()
             
             return response.data if response.data else []
             
         except Exception as e:
-            logger.error(f"Error obteniendo registros {table}: {e}")
+            logger.error(f"Error obteniendo registros de {table}: {e}")
             return []
+
+    def get_record(self, table, user_uuid, select_fields='*'):
+        """Obtener un único registro del usuario"""
+        try:
+            auth_client = self.get_authenticated_client()
+            if not auth_client:
+                return None
+            
+            ref_field = 'auth_user_id' if table != 'usuarios' else 'auth_user_id'
+            response = auth_client.table(table).select(select_fields).eq(ref_field, user_uuid).execute()
+            
+            return response.data[0] if response.data else None
+            
+        except Exception as e:
+            logger.error(f"Error obteniendo registro de {table}: {e}")
+            return None
 
     def delete_record(self, table, user_uuid, extra_conditions=None):
         """Eliminar un registro de cualquier tabla"""

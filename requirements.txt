@@ -2,7 +2,8 @@ Flask
 python-dotenv
 pandas
 chardet
-supabase
+urllib3
+openlocationcode
 segno
 requests
 httpx
