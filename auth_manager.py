@@ -135,7 +135,7 @@ class GoogleOAuth:
                 .maybe_single()\
                 .execute()
             
-            if user_check.data:
+            if user_check and hasattr(user_check, 'data') and user_check.data:
                 logger.info(f"Usuario existente encontrado: {user.email} (auth_user_id: {auth_user_id})")
                 return auth_user_id
             
@@ -154,15 +154,15 @@ class GoogleOAuth:
             # Usar cliente de db para insertar
             insert_result = db.client.table('usuarios').insert(new_user).execute()
             
-            if insert_result.data and len(insert_result.data) > 0:
+            if insert_result and hasattr(insert_result, 'data') and insert_result.data and len(insert_result.data) > 0:
                 logger.info(f"Usuario creado exitosamente: {user.email} (auth_user_id: {auth_user_id})")
                 
-                # Crear info de contacto básica
+                # Crear info de contacto básica según esquema BD
                 try:
                     db.client.table('info_contacto').insert({
                         'auth_user_id': auth_user_id,
-                        'email': user.email,
-                        'nombre_completo': user.user_metadata.get('full_name', '')
+                        'correo_principal': user.email,
+                        'nombre_completo': user.user_metadata.get('full_name', user.email.split('@')[0])
                     }).execute()
                 except Exception as e:
                     logger.warning(f"Error creando info_contacto: {e}")
@@ -177,42 +177,18 @@ class GoogleOAuth:
             # Siempre retornar auth_user_id para mantener consistencia
             return str(user.id)
     
-    def _create_contact_info(self, auth_user_id, user):
-        """Crea información de contacto básica para nuevo usuario"""
-        try:
-            db.client.table('info_contacto').insert({
-                'auth_user_id': auth_user_id,
-                'nombre_completo': user.user_metadata.get('full_name', ''),
-                'correo_principal': user.email
-            }).execute()
-        except Exception as e:
-            logger.warning(f"Error creando info_contacto: {str(e)}")
-    
-    def _create_contact_info_with_client(self, client, auth_user_id, user):
-        """Crea información de contacto usando cliente específico"""
-        try:
-            client.table('info_contacto').insert({
-                'auth_user_id': auth_user_id,
-                'nombre_completo': user.user_metadata.get('full_name', ''),
-                'correo_principal': user.email
-            }).execute()
-        except Exception as e:
-            logger.warning(f"Error creando info_contacto: {str(e)}")
     
     def _create_session(self, user, auth_user_id, session_data):
-        """Crea la sesión de usuario"""
-        session['user_id'] = auth_user_id  # Ahora user_id es el auth_user_id
-        session['auth_user_id'] = str(user.id)
+        """Crea la sesión de usuario - método único y simplificado"""
+        session['user_id'] = auth_user_id  # user_id = auth_user_id (consistencia)
         session['user_email'] = user.email
-        session['user_name'] = user.user_metadata.get('full_name', user.email)
+        session['user_name'] = user.user_metadata.get('full_name', user.email.split('@')[0])
         
         # Almacenar tokens si están disponibles
         if session_data:
             session['access_token'] = session_data.access_token
             if session_data.refresh_token:
                 session['refresh_token'] = session_data.refresh_token
-
-# logger = logging.getLogger(__name__)
 
 class AuthManager:
     """Gestor centralizado de autenticación y sesiones de usuario."""

@@ -412,10 +412,10 @@ class Searcher:
                 if user_response.data:
                     return user_response.data[0]
                     
-            # Buscar por segmento de UUID - convertir a texto para usar LIKE
+            # Buscar por segmento de UUID - usar cast correcto
             segment = self.get_uuid_segment(user_identifier)
             if segment and len(segment) >= 4:
-                segment_response = self.supabase.table('usuarios').select('*').filter('auth_user_id::text', 'like', f'{segment}%').execute()
+                segment_response = self.supabase.table('usuarios').select('*').filter('auth_user_id', 'like', f'{segment}%').execute()
                 if segment_response.data:
                     return segment_response.data[0]
                     
@@ -446,18 +446,18 @@ class Searcher:
         users = []
         seen_users = set()
         
-        # Buscar en username, nombre y apellido
-        search_fields = ['username', 'nombre', 'apellido']
+        # Buscar solo en username (según esquema BD actual)
+        search_fields = ['username']
         
         for field in search_fields:
             try:
                 response = self.supabase.table('usuarios').select('*').ilike(field, f'%{query}%').limit(limit).execute()
                 if response.data:
                     for user in response.data:
-                        user_id = user.get('id')
-                        if user_id and user_id not in seen_users:
+                        auth_user_id = user.get('auth_user_id')
+                        if auth_user_id and auth_user_id not in seen_users:
                             users.append(user)
-                            seen_users.add(user_id)
+                            seen_users.add(auth_user_id)
             except:
                 continue
         
