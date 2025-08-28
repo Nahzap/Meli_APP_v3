@@ -111,7 +111,7 @@ class GoogleOAuth:
             
             return {
                 'success': True,
-                'redirect_url': f'/profile/{user_db_id}',
+                'redirect_url': '/edit-profile',
                 'user': user
             }
             
@@ -140,11 +140,12 @@ class GoogleOAuth:
                 return auth_user_id
             
             # Crear nuevo usuario con datos mínimos para evitar RLS
+            user_metadata = user.user_metadata or {}
             new_user = {
                 'auth_user_id': auth_user_id,
-                'username': user.email.split('@')[0],  # Usar parte del email como username
-                'tipo_usuario': 'apicultor',
-                'role': 'user',
+                'username': user_metadata.get('full_name', user.email.split('@')[0]),  # Username = nombre completo
+                'tipo_usuario': 'regular',
+                'role': user_metadata.get('role', 'regular'),
                 'status': 'activo',
                 'activo': True,
                 'fecha_registro': 'now()',
@@ -343,14 +344,26 @@ class AuthManager:
         user_id = AuthManager.get_current_user_id()
         if not user_id:
             return
+        
+        # Obtener username desde la tabla usuarios
+        username = None
+        try:
+            from supabase_client import SupabaseClient
+            supabase = SupabaseClient()
+            usuario_response = supabase.client.table('usuarios').select('username').eq('auth_user_id', user_id).single().execute()
+            if usuario_response.data:
+                username = usuario_response.data.get('username')
+        except Exception as e:
+            logger.warning(f"No se pudo obtener username para user_id {user_id}: {e}")
             
-        # Usar la información almacenada en session
+        # Usar la información almacenada en session y username de la base de datos
         g.user = {
             'id': user_id,
             'user_uuid': user_id,
             'name': session.get('user_name'),
             'email': session.get('user_email'),
             'empresa': session.get('user_empresa', ''),
+            'username': username,
             'access_token': AuthManager._get_auth_token()
         }
     
@@ -659,7 +672,7 @@ class AuthManager:
 
     
     @staticmethod
-    def register_user(email: str, password: str, full_name: str, company: str = ""):
+    def register_user(email: str, password: str, full_name: str, company: str = "", role: str = "regular"):
         """
         Registra un nuevo usuario usando modify_DB.py centralizadamente.
         
@@ -712,7 +725,8 @@ class AuthManager:
                     "data": {
                         "full_name": full_name,
                         "company": company,
-                        "email": email
+                        "email": email,
+                        "role": role
                     },
                     "email_confirm": False  # Deshabilitar confirmación de email
                 }
@@ -724,18 +738,55 @@ class AuthManager:
                 auth_user_id = auth_response.user.id
                 logger.info(f"Usuario creado en Auth con ID: {auth_user_id}")
                 
-                # Si el usuario fue creado pero no confirmado, intentar login directo
-                # Las tablas se inicializarán después de la confirmación de email
-                logger.info("Usuario registrado exitosamente. Debe confirmar su email antes de inicializar tablas.")
+                # Crear usuario en base de datos local inmediatamente
+                try:
+                    # Crear usuario en tabla usuarios
+                    user_data = {
+                        'auth_user_id': auth_user_id,
+                        'username': full_name,  # Username = nombre completo
+                        'tipo_usuario': 'regular',
+                        'role': role,
+                        'status': 'activo',
+                        'activo': True,
+                        'fecha_registro': 'now()',
+                        'last_login': 'now()'
+                    }
+                    
+                    db.client.table('usuarios').insert(user_data).execute()
+                    logger.info(f"Usuario creado en tabla usuarios: {full_name}")
+                    
+                    # Crear info de contacto básica
+                    contact_data = {
+                        'auth_user_id': auth_user_id,
+                        'correo_principal': email,
+                        'nombre_completo': full_name
+                    }
+                    
+                    db.client.table('info_contacto').insert(contact_data).execute()
+                    logger.info(f"Info contacto creada para: {full_name}")
+                    
+                except Exception as e:
+                    logger.warning(f"Error creando datos locales: {e}")
+                
+                # CREAR SESIÓN INMEDIATAMENTE después del registro
+                if auth_response.session:
+                    session['user_id'] = auth_user_id
+                    session['user_email'] = email
+                    session['user_name'] = full_name
+                    session['access_token'] = auth_response.session.access_token
+                    if auth_response.session.refresh_token:
+                        session['refresh_token'] = auth_response.session.refresh_token
+                    
+                    logger.info(f"Sesión creada para usuario: {full_name} (ID: {auth_user_id})")
                 
                 logger.info("Registro completado exitosamente")
                 return {
                     "success": True,
-                    "message": "Usuario registrado. Por favor confirma tu email antes de iniciar sesión.",
-                    "redirect_url": "/login",
+                    "message": "Usuario registrado exitosamente. Redirigiendo a editar perfil...",
+                    "redirect_url": "/edit-profile",
                     "status_code": 200,
                     "auth_user_id": auth_user_id,
-                    "requires_confirmation": True
+                    "requires_confirmation": False  # Ya no requiere confirmación
                 }
             else:
                 logger.error("No se pudo crear el usuario en Supabase Auth")

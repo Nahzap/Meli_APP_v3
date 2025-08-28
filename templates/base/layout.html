@@ -67,7 +67,7 @@
                             <button @click="open = !open" 
                                     @click.away="open = false"
                                     class="text-slate-600 hover:text-primary transition-colors flex items-center cursor-pointer">
-                                {{ g.user.name }}
+                                {{ g.user.username or 'Usuario' }}
                                 <svg class="w-4 h-4 ml-1" :class="{ 'rotate-180': open }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                                 </svg>

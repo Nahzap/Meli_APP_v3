@@ -405,21 +405,21 @@ class Searcher:
             if username_response.data:
                 return username_response.data[0]
                 
-            # Buscar por UUID exacto - buscar por auth_user_id
-            if len(user_identifier) == 36 and user_identifier.count('-') == 4:
-                # Buscar por auth_user_id (PRIMARY KEY)
-                user_response = self.supabase.table('usuarios').select('*').eq('auth_user_id', user_identifier).execute()
-                if user_response.data:
-                    return user_response.data[0]
+            # Buscar por segmento de UUID (primeros 8 caracteres) - usar cast a text
+            if len(user_identifier) == 8:
+                # Usar una consulta SQL raw para hacer el cast correcto
+                try:
+                    # Obtener todos los usuarios y filtrar en Python para evitar problemas de casting
+                    all_users_response = self.supabase.table('usuarios').select('*').execute()
+                    if all_users_response.data:
+                        for user in all_users_response.data:
+                            user_id_str = str(user.get('auth_user_id', ''))
+                            if user_id_str.lower().startswith(user_identifier.lower()):
+                                return user
+                except Exception as segment_error:
+                    logger.error(f"Error en búsqueda por segmento: {str(segment_error)}")
                     
-            # Buscar por segmento de UUID - usar cast correcto
-            segment = self.get_uuid_segment(user_identifier)
-            if segment and len(segment) >= 4:
-                segment_response = self.supabase.table('usuarios').select('*').filter('auth_user_id', 'like', f'{segment}%').execute()
-                if segment_response.data:
-                    return segment_response.data[0]
-                    
-            # Buscar por username (ya no hay nombre/apellido en la nueva estructura)
+            # Buscar por username parcial
             username_search = self.supabase.table('usuarios').select('*').ilike('username', f'%{user_identifier}%').execute()
             if username_search.data:
                 return username_search.data[0]

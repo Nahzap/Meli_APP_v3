@@ -1,10 +1,13 @@
-from flask import Blueprint, request, jsonify, g
-import logging
-from modify_DB import db_modifier, update_user_data
+from flask import Blueprint, request, jsonify, session, g
 from auth_manager import AuthManager
+from modify_DB import DatabaseModifier, update_user_data, update_user_contact
+from supabase_client import SupabaseClient
+import logging
+import os
+import csv
+
 
 logger = logging.getLogger(__name__)
-
 edit_bp = Blueprint('edit_user_data', __name__)
 
 @edit_bp.route('/api/edit/usuarios', methods=['POST'])
@@ -78,13 +81,19 @@ def handle_ubicaciones():
                 return jsonify({"success": False, "error": "ID de ubicación requerido"}), 400
             
             # Verificar que la ubicación pertenece al usuario
-            ubicaciones = db_modifier.get_records('ubicaciones', user_uuid)
+            supabase = SupabaseClient()
+            ubicaciones_response = supabase.client.table('ubicaciones').select('*').eq('auth_user_id', user_uuid).execute()
+            ubicaciones = ubicaciones_response.data if ubicaciones_response.data else []
             ubicacion = next((u for u in ubicaciones if u.get('id') == location_id), None)
             
             if not ubicacion:
                 return jsonify({"success": False, "error": "Ubicación no encontrada o no pertenece al usuario"}), 404
             
-            result, status_code = db_modifier.delete_record('ubicaciones', user_uuid, {'id': location_id})
+            result_response = supabase.client.table('ubicaciones').delete().eq('id', location_id).eq('auth_user_id', user_uuid).execute()
+            success = bool(result_response.data)
+            result = {"success": success, "message": "Ubicación eliminada exitosamente" if success else "Error al eliminar"}
+            status_code = 200 if success else 400
+            
             return jsonify(result), status_code
             
         elif method == 'POST':
@@ -114,7 +123,10 @@ def handle_ubicaciones():
                 'descripcion': str(processed_data.get('descripcion', '')).strip()
             }
             
-            result, status_code = db_modifier.insert_record('ubicaciones', insert_data, user_uuid)
+            result_response = supabase.client.table('ubicaciones').insert(insert_data).execute()
+            success = bool(result_response.data)
+            result = {"success": success, "data": result_response.data[0] if success else None}
+            status_code = 201 if success else 400
             
             if result and isinstance(result, dict) and result.get('success'):
                 result['profile_url'] = f"/profile/{user_uuid}"
@@ -132,6 +144,7 @@ def handle_ubicaciones():
                 return jsonify({"success": False, "error": "ID de ubicación requerido"}), 400
             
             # Verificar que la ubicación pertenece al usuario
+            db_modifier = DatabaseModifier()
             ubicaciones = db_modifier.get_records('ubicaciones', user_uuid)
             ubicacion = next((u for u in ubicaciones if u.get('id') == location_id), None)
             
@@ -158,7 +171,10 @@ def handle_ubicaciones():
                 'descripcion': str(processed_data.get('descripcion', '')).strip()
             }
             
-            result, status_code = db_modifier.update_record('ubicaciones', update_data, user_uuid, {'id': location_id})
+            result_response = supabase.client.table('ubicaciones').update(update_data).eq('id', location_id).eq('auth_user_id', user_uuid).execute()
+            success = bool(result_response.data)
+            result = {"success": success, "data": result_response.data[0] if success else None}
+            status_code = 200 if success else 400
             
             if result and isinstance(result, dict) and result.get('success'):
                 result['profile_url'] = f"/profile/{user_uuid}"
@@ -188,18 +204,25 @@ def get_usuario_data():
         logger.info(f"Usuario UUID obtenido: {user_uuid}")
         
         # Obtener datos del usuario
-        usuario = db_modifier.get_record('usuarios', user_uuid)
+        supabase = SupabaseClient()
+        
+        # Obtener datos del usuario
+        usuario_response = supabase.client.table('usuarios').select('*').eq('auth_user_id', user_uuid).single().execute()
+        usuario = usuario_response.data if usuario_response.data else None
         if not usuario:
             return jsonify({"success": False, "error": "Usuario no encontrado en la base de datos"}), 404
+            
         # Obtener información de contacto
-        info_contacto = db_modifier.get_record('info_contacto', user_uuid)
+        info_contacto_response = supabase.client.table('info_contacto').select('*').eq('auth_user_id', user_uuid).single().execute()
+        info_contacto = info_contacto_response.data if info_contacto_response.data else {}
         
         # Obtener ubicaciones
-        ubicaciones = db_modifier.get_record('ubicaciones', user_uuid)
+        ubicaciones_response = supabase.client.table('ubicaciones').select('*').eq('auth_user_id', user_uuid).execute()
+        ubicaciones = ubicaciones_response.data if ubicaciones_response.data else []
         
         return jsonify({
             "success": True,
-            "usuario": db_modifier.get_record('usuarios', user_uuid),
+            "usuario": usuario,
             "info_contacto": info_contacto or {},
             "ubicaciones": ubicaciones or {},
             "id": user_uuid  # UUID completo del usuario autenticado
@@ -219,7 +242,9 @@ def get_ubicaciones_data():
             return jsonify({"success": False, "error": "Usuario no encontrado"}), 404
         
         # Obtener ubicaciones
-        ubicaciones = db_modifier.get_records('ubicaciones', user_uuid)
+        supabase = SupabaseClient()
+        ubicaciones_response = supabase.client.table('ubicaciones').select('*').eq('auth_user_id', user_uuid).execute()
+        ubicaciones = ubicaciones_response.data if ubicaciones_response.data else []
         
         return jsonify({
             "success": True,
@@ -239,8 +264,19 @@ def get_info_contacto_data():
         if not user_uuid:
             return jsonify({"success": False, "error": "Usuario no encontrado"}), 404
         
-        # Obtener información de contacto
-        info_contacto = db_modifier.get_record('info_contacto', user_uuid)
+        # Obtener información de contacto y email del auth.users
+        supabase = SupabaseClient()
+        
+        # Obtener email del usuario autenticado desde g.user (ya disponible)
+        user_email = g.user.get('email')
+        
+        # Obtener info_contacto
+        info_contacto_response = supabase.client.table('info_contacto').select('*').eq('auth_user_id', user_uuid).single().execute()
+        info_contacto = info_contacto_response.data if info_contacto_response.data else {}
+        
+        # Agregar email al objeto info_contacto
+        if user_email:
+            info_contacto['correo_principal'] = user_email
         
         return jsonify({
             "success": True,
@@ -302,7 +338,6 @@ def edit_info_contacto():
         logger.info(f"Datos finales para actualizar: {final_data}")
         
         # Usar la función específica para info_contacto
-        from modify_DB import update_user_contact
         result, status_code = update_user_contact(filtered_data, user_uuid)
         
         # Agregar URL del perfil siempre usando el UUID del usuario autenticado
@@ -317,3 +352,86 @@ def edit_info_contacto():
     except Exception as e:
         logger.error(f"Error editando info_contacto: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
+
+@edit_bp.route('/api/suggestions/comunas', methods=['GET'])
+def get_comuna_suggestions():
+    """Obtiene sugerencias de comunas desde clases.csv."""
+    try:
+        query = request.args.get('q', '').strip()
+        if not query or len(query) < 2:
+            return jsonify({'success': True, 'suggestions': []})
+        
+        csv_path = os.path.join(os.path.dirname(__file__), 'docs', 'clases.csv')
+        comunas = set()
+        
+        try:
+            with open(csv_path, 'r', encoding='utf-8') as file:
+                reader = csv.DictReader(file, delimiter=';')
+                for row in reader:
+                    comuna = row.get('Comuna', '').strip()
+                    if comuna and query.lower() in comuna.lower():
+                        # Capitalizar primera letra de cada palabra
+                        comuna_capitalized = ' '.join(word.capitalize() for word in comuna.split())
+                        comunas.add(comuna_capitalized)
+        except FileNotFoundError:
+            logger.warning(f"Archivo clases.csv no encontrado en {csv_path}")
+            return jsonify({'success': True, 'suggestions': []})
+        
+        # Convertir a lista ordenada
+        suggestions = sorted(list(comunas))[:10]  # Limitar a 10 sugerencias
+        
+        return jsonify({
+            'success': True,
+            'suggestions': suggestions
+        })
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo sugerencias de comunas: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Error interno del servidor'
+        }), 500
+
+@edit_bp.route('/api/suggestions/regiones', methods=['GET'])
+def get_region_suggestions():
+    """Obtiene sugerencias de regiones basadas en el término de búsqueda."""
+    try:
+        query = request.args.get('q', '').strip()
+        if not query or len(query) < 2:
+            return jsonify({'success': True, 'suggestions': []})
+        
+        supabase = SupabaseClient()
+        
+        # Buscar regiones en la tabla info_contacto
+        response = supabase.client.table('info_contacto')\
+            .select('region')\
+            .ilike('region', f'%{query}%')\
+            .not_.is_('region', 'null')\
+            .neq('region', '')\
+            .limit(10)\
+            .execute()
+        
+        # Extraer regiones únicas y capitalizarlas
+        regiones = set()
+        if response.data:
+            for item in response.data:
+                region = item.get('region', '').strip()
+                if region:
+                    # Capitalizar primera letra de cada palabra
+                    region_capitalized = ' '.join(word.capitalize() for word in region.split())
+                    regiones.add(region_capitalized)
+        
+        # Convertir a lista ordenada
+        suggestions = sorted(list(regiones))
+        
+        return jsonify({
+            'success': True,
+            'suggestions': suggestions
+        })
+        
+    except Exception as e:
+        logger.error(f"Error obteniendo sugerencias de regiones: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Error interno del servidor'
+        }), 500

@@ -96,10 +96,16 @@ def register():
             telefono = request.form.get('telefono')
             role = request.form.get('role')
         
-        logger.info(f"Datos recibidos - Username: {username}, Email: {email}, Nombre: {nombre_completo}, Role: {role}")
+        # Asegurar que username = nombre_completo (con espacios)
+        if nombre_completo and not username:
+            username = nombre_completo.strip()
+        elif username and nombre_completo:
+            username = nombre_completo.strip()  # Forzar username = nombre completo
         
-        if not username or not email or not password or not nombre_completo:
-            error_msg = "Todos los campos requeridos deben completarse"
+        logger.info(f"Datos procesados - Username: {username}, Email: {email}, Nombre: {nombre_completo}, Role: {role}")
+        
+        if not email or not password or not nombre_completo:
+            error_msg = "Nombre completo, email y contraseña son requeridos"
             logger.error(f"Validación fallida: {error_msg}")
             
             if request.is_json:
@@ -109,8 +115,8 @@ def register():
         
         try:
             logger.info("Iniciando registro de usuario con AuthManager")
-            # Usar AuthManager para registro consistente
-            result = AuthManager.register_user(email, password, nombre_completo, telefono or "")
+            # Usar AuthManager para registro consistente - username será igual a nombre_completo
+            result = AuthManager.register_user(email, password, nombre_completo, telefono or "", role or "regular")
             
             logger.info(f"Resultado del registro: {result}")
             
@@ -120,10 +126,10 @@ def register():
                     return jsonify({
                         "success": True,
                         "message": "Usuario registrado exitosamente",
-                        "redirect_url": "/login"
+                        "redirect_url": "/edit-profile"
                     })
                 else:
-                    return redirect(result.get('redirect_url', '/login'))
+                    return redirect('/edit-profile')
             else:
                 logger.error(f"Error en registro: {result['error']}")
                 if request.is_json:
@@ -234,7 +240,7 @@ def auth_callback_js():
                 
                 return jsonify({
                     "success": True,
-                    "redirect_url": f"/profile/{user_db_id}"
+                    "redirect_url": "/edit-profile"
                 })
             else:
                 return jsonify({

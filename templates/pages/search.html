@@ -98,35 +98,51 @@ let searchTimeout;
 
 // Debounced search suggestions
 function getSuggestions(query) {
+    console.log('[DEBUG] getSuggestions called with query:', query);
+    
     if (query.length < 2) {
+        console.log('[DEBUG] Query too short, hiding suggestions');
         hideSuggestions();
         return;
     }
 
+    console.log('[DEBUG] Fetching suggestions from:', `/sugerir?q=${encodeURIComponent(query)}`);
+    
     fetch(`/sugerir?q=${encodeURIComponent(query)}`)
-        .then(response => response.json())
+        .then(response => {
+            console.log('[DEBUG] Response status:', response.status);
+            return response.json();
+        })
         .then(data => {
+            console.log('[DEBUG] Received data:', data);
             if (data.suggestions && data.suggestions.length > 0) {
+                console.log('[DEBUG] Displaying', data.suggestions.length, 'suggestions');
                 displaySuggestions(data.suggestions);
             } else {
+                console.log('[DEBUG] No suggestions found, hiding');
                 hideSuggestions();
             }
         })
         .catch(error => {
-            console.error('Error fetching suggestions:', error);
+            console.error('[DEBUG] Error fetching suggestions:', error);
             hideSuggestions();
         });
 }
 
 function displaySuggestions(suggestionsData) {
+    console.log('[DEBUG] displaySuggestions called with:', suggestionsData);
     suggestionsList.innerHTML = '';
     
     if (suggestionsData.length === 0) {
+        console.log('[DEBUG] No suggestions to display, hiding');
         hideSuggestions();
         return;
     }
     
+    console.log('[DEBUG] Creating', suggestionsData.length, 'suggestion items');
+    
     suggestionsData.forEach((item, index) => {
+        console.log('[DEBUG] Processing suggestion item:', item);
         const suggestionItem = document.createElement('div');
         suggestionItem.className = 'suggestion-item px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-b-0';
         suggestionItem.setAttribute('data-index', index);
@@ -143,6 +159,7 @@ function displaySuggestions(suggestionsData) {
         `;
         
         suggestionItem.addEventListener('click', () => {
+            console.log('[DEBUG] Suggestion clicked:', item.nombre);
             searchInput.value = item.nombre;
             hideSuggestions();
             // Auto-submit form for immediate search
@@ -152,6 +169,7 @@ function displaySuggestions(suggestionsData) {
         suggestionsList.appendChild(suggestionItem);
     });
     
+    console.log('[DEBUG] Showing suggestions container');
     suggestions.classList.remove('hidden');
     selectedIndex = -1;
 }

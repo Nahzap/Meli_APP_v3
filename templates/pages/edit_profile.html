@@ -42,53 +42,41 @@
                 <div id="form-usuarios" class="tab-content">
                     <div class="mb-6">
                         <h3 class="text-lg font-semibold text-gray-900 mb-2">Datos de Usuario</h3>
-                        <p class="text-sm text-gray-600">Edita tu username y rol. El tipo de usuario siempre es "Regular".</p>
+                        <p class="text-sm text-gray-600">Edita tu tipo de usuario. El nombre de usuario es igual al nombre completo.</p>
                     </div>
                     
                     <form onsubmit="submitForm(event, 'usuarios')" class="space-y-6">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <!-- Username -->
+                            <!-- Username (no editable) -->
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">
-                                    Username *
-                                    <span class="text-xs text-gray-500">(3-80 caracteres, solo letras, números, - y _)</span>
-                                </label>
-                                <input type="text" 
-                                       name="username" 
-                                       id="usuarios-username" 
-                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                                       minlength="3" 
-                                       maxlength="80" 
-                                       pattern="^[a-zA-Z0-9_-]+$"
-                                       required>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Nombre de Usuario</label>
+                                <div class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-700" id="usuarios-username-display">
+                                    <!-- Se llena automáticamente con el nombre completo -->
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">El nombre de usuario es igual al correo sin "@DominioCorreo.com"</p>
                             </div>
                             
-                            <!-- Tipo Usuario (readonly) -->
+                            <!-- Tipo Usuario (editable) -->
                             <div>
-                                <label class="block text-sm font-medium text-gray-700 mb-2">Tipo de Usuario</label>
-                                <input type="text" 
-                                       value="Regular" 
-                                       readonly 
-                                       class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600 cursor-not-allowed">
-                                <p class="text-xs text-gray-500 mt-1">Siempre "Regular" para usuarios registrados</p>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Tipo de Usuario *</label>
+                                <select name="tipo_usuario" 
+                                        id="usuarios-tipo_usuario" 
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                                        required>
+                                    <option value="">Seleccionar tipo...</option>
+                                    <option value="apicultor">🐝 Apicultor</option>
+                                    <option value="prestador_servicios">🔧 Prestador de Servicios</option>
+                                    <option value="proveedor">📦 Proveedor</option>
+                                    <option value="regular">👤 Regular</option>
+                                </select>
                             </div>
                         </div>
                         
-                        <!-- Role -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Rol *</label>
-                            <select name="role" 
-                                    id="usuarios-role" 
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                                    required>
-                                <option value="APICULTOR">APICULTOR</option>
-                                <option value="PROVEEDOR">PROVEEDOR</option>
-                                <option value="PRESTADOR DE SERVICIOS">PRESTADOR DE SERVICIOS</option>
-                            </select>
-                        </div>
+                        <!-- Role (mantener para compatibilidad) -->
+                        <input type="hidden" name="role" id="usuarios-role" value="regular">
                         
                         <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-medium py-3 px-4 rounded-lg transition-colors">
-                            <i class="fas fa-save mr-2"></i>Guardar Datos de Usuario
+                            <i class="fas fa-save mr-2"></i>Guardar y Continuar a Contacto
                         </button>
                     </form>
                 </div>
@@ -129,14 +117,14 @@
                         </div>
                         
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <!-- Correo Principal -->
+                            <!-- Correo Principal (Solo lectura) -->
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Correo Principal</label>
-                                <input type="email" 
-                                       name="correo_principal" 
-                                       id="contacto-correo_principal" 
-                                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                                       placeholder="tu@email.com">
+                                <div class="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-700" id="contacto-correo_principal-display">
+                                    <!-- Se llena automáticamente desde los datos del usuario -->
+                                </div>
+                                <input type="hidden" name="correo_principal" id="contacto-correo_principal">
+                                <p class="text-xs text-gray-500 mt-1">El correo no se puede modificar desde aquí</p>
                             </div>
                             
                             <!-- Teléfono Principal -->
@@ -162,28 +150,40 @@
                         
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <!-- Comuna -->
-                            <div>
+                            <div class="relative">
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Comuna</label>
                                 <input type="text" 
                                        name="comuna" 
                                        id="contacto-comuna" 
                                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                                       placeholder="Las Condes">
+                                       placeholder="Las Condes"
+                                       autocomplete="off"
+                                       oninput="handleComunaInput(this)"
+                                       onblur="hideSuggestions('comuna')">
+                                <div id="comuna-suggestions" class="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg mt-1 hidden max-h-40 overflow-y-auto">
+                                    <!-- Sugerencias dinámicas -->
+                                </div>
                             </div>
                             
                             <!-- Región -->
-                            <div>
+                            <div class="relative">
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Región</label>
                                 <input type="text" 
                                        name="region" 
                                        id="contacto-region" 
                                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
-                                       placeholder="Región Metropolitana">
+                                       placeholder="Región Metropolitana"
+                                       autocomplete="off"
+                                       oninput="handleRegionInput(this)"
+                                       onblur="hideSuggestions('region')">
+                                <div id="region-suggestions" class="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg mt-1 hidden max-h-40 overflow-y-auto">
+                                    <!-- Sugerencias dinámicas -->
+                                </div>
                             </div>
                         </div>
                         
                         <button type="submit" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-medium py-3 px-4 rounded-lg transition-colors">
-                            <i class="fas fa-save mr-2"></i>Guardar Información de Contacto
+                            <i class="fas fa-save mr-2"></i>Guardar y Continuar a Ubicación
                         </button>
                     </form>
                 </div>
@@ -367,30 +367,48 @@ async function loadTabData(tabName) {
         const result = await response.json();
         
         if (result.success) {
-            const data = result.data;
+            // Obtener datos según el tipo de tab
+            let data;
+            if (tabName === 'usuarios') {
+                data = result.usuario || result.data || {};
+            } else if (tabName === 'info_contacto') {
+                data = result.info_contacto || result.data || {};
+            } else if (tabName === 'ubicaciones') {
+                data = result.ubicaciones || result.data || [];
+            } else {
+                data = result.data || {};
+            }
             
             // Store user ID globally for profile navigation - usar UUID completo
-            if (tabName === 'usuarios' && data.id) {
-                window.currentUserId = data.id;
+            if (tabName === 'usuarios' && data.auth_user_id) {
+                window.currentUserId = data.auth_user_id;
                 console.log('Usuario UUID completo cargado:', window.currentUserId);
-            } else if (tabName === 'usuarios' && result.usuario && result.usuario.id) {
+            } else if (result.id) {
                 // Fallback si viene en estructura diferente
-                window.currentUserId = result.usuario.id;
+                window.currentUserId = result.id;
                 console.log('Usuario UUID completo cargado (fallback):', window.currentUserId);
             }
             
             // Populate form fields based on tab
             if (tabName === 'usuarios') {
-                if (data.username) document.getElementById('usuarios-username').value = data.username || '';
-                if (data.role) document.getElementById('usuarios-role').value = data.role || '';
+                // Precargar todos los campos de usuario
+                document.getElementById('usuarios-username-display').textContent = data.username || '';
+                document.getElementById('usuarios-tipo_usuario').value = data.tipo_usuario || '';
+                document.getElementById('usuarios-role').value = data.role || 'regular';
             } else if (tabName === 'info_contacto') {
-                if (data.nombre_completo) document.getElementById('contacto-nombre_completo').value = data.nombre_completo || '';
-                if (data.nombre_empresa) document.getElementById('contacto-nombre_empresa').value = data.nombre_empresa || '';
-                if (data.correo_principal) document.getElementById('contacto-correo_principal').value = data.correo_principal || '';
-                if (data.direccion) document.getElementById('contacto-direccion').value = data.direccion || '';
-                if (data.comuna) document.getElementById('contacto-comuna').value = data.comuna || '';
-                if (data.region) document.getElementById('contacto-region').value = data.region || '';
-                if (data.telefono_principal) document.getElementById('contacto-telefono_principal').value = data.telefono_principal || '';
+                // Precargar todos los campos de información de contacto
+                document.getElementById('contacto-nombre_completo').value = data.nombre_completo || '';
+                document.getElementById('contacto-nombre_empresa').value = data.nombre_empresa || '';
+                
+                // Mostrar correo en campo de solo lectura - usar el email del backend que ya incluye auth.users
+                const userEmail = data.correo_principal || 'No disponible';
+                document.getElementById('contacto-correo_principal-display').textContent = userEmail;
+                document.getElementById('contacto-correo_principal').value = data.correo_principal || '';
+                
+                document.getElementById('contacto-direccion').value = data.direccion || '';
+                document.getElementById('contacto-comuna').value = data.comuna || '';
+                document.getElementById('contacto-region').value = data.region || '';
+                document.getElementById('contacto-telefono_principal').value = data.telefono_principal || '';
             } else if (tabName === 'ubicaciones') {
                 // Display all locations - usar result.ubicaciones en lugar de data
                 displayUbicaciones(result.ubicaciones || []);
@@ -409,21 +427,17 @@ async function submitForm(event, tableName) {
     const formData = new FormData(form);
     const data = {};
     
-    // Convertir FormData a objeto - incluir TODOS los campos, incluso vacíos
+    // Convertir FormData a objeto - SOLO incluir campos con contenido
     for (let [key, value] of formData.entries()) {
-        data[key] = value.trim();
+        const trimmedValue = value.trim();
+        if (trimmedValue !== '') {
+            data[key] = trimmedValue;
+        }
     }
     
-    // Si no hay ningún campo, mostrar advertencia
+    // Si no hay ningún campo con contenido, mostrar advertencia
     if (Object.keys(data).length === 0) {
-        showToast('warning', 'No hay campos en el formulario');
-        return;
-    }
-    
-    // Verificar que al menos un campo tenga contenido
-    const hasContent = Object.values(data).some(val => val && val.trim() !== '');
-    if (!hasContent) {
-        showToast('warning', 'Por favor ingresa al menos un valor');
+        showToast('warning', 'Por favor ingresa al menos un valor para guardar');
         return;
     }
     
@@ -443,32 +457,25 @@ async function submitForm(event, tableName) {
         if (result.success) {
             showToast('success', `${tableName.charAt(0).toUpperCase() + tableName.slice(1)} actualizado exitosamente`);
             
-            // Redirigir al perfil después de 2 segundos
+            // Navegar a la siguiente pestaña según el flujo
             setTimeout(() => {
-                // Usar SIEMPRE el UUID completo del usuario autenticado
-                const userId = window.currentUserId;
-                if (userId && userId !== 'undefined' && userId !== 'null') {
-                    const fullProfileUrl = `/profile/${userId}`;
-                    console.log('Redirigiendo a perfil:', fullProfileUrl);
-                    window.location.href = fullProfileUrl;
-                } else {
-                    console.error('No se pudo obtener el UUID del usuario');
-                    // Fallback: usar el UUID que viene en la respuesta
-                    if (result.user_id) {
-                        window.location.href = `/profile/${result.user_id}`;
-                    } else if (result.id) {
-                        window.location.href = `/profile/${result.id}`;
+                if (tableName === 'usuarios') {
+                    showTab('info_contacto');
+                } else if (tableName === 'info_contacto') {
+                    showTab('ubicaciones');
+                } else if (tableName === 'ubicaciones') {
+                    // Redirigir al perfil después de completar ubicaciones
+                    const userId = window.currentUserId;
+                    if (userId && userId !== 'undefined' && userId !== 'null') {
+                        const fullProfileUrl = `/profile/${userId}`;
+                        console.log('Redirigiendo a perfil:', fullProfileUrl);
+                        window.location.href = fullProfileUrl;
                     } else {
-                        // Último fallback: obtener desde localStorage o session
-                        const storedUserId = localStorage.getItem('currentUserId') || sessionStorage.getItem('currentUserId');
-                        if (storedUserId) {
-                            window.location.href = `/profile/${storedUserId}`;
-                        } else {
-                            console.error('No hay UUID disponible para redirección');
-                        }
+                        console.error('No se pudo obtener el UUID del usuario');
+                        window.location.href = '/profile';
                     }
                 }
-            }, 2000);
+            }, 1500);
         } else {
             showToast('error', result.error || 'Error al actualizar');
         }
@@ -476,6 +483,131 @@ async function submitForm(event, tableName) {
         console.error('Error:', error);
         showToast('error', 'Error al procesar la solicitud');
     }
+}
+
+// Funciones para autocomplete de Comuna
+let comunaTimeout;
+async function handleComunaInput(input) {
+    const query = input.value.trim();
+    
+    // Capitalizar automáticamente mientras escribe
+    const capitalized = capitalizeWords(query);
+    if (input.value !== capitalized) {
+        const cursorPos = input.selectionStart;
+        input.value = capitalized;
+        input.setSelectionRange(cursorPos, cursorPos);
+    }
+    
+    // Limpiar timeout anterior
+    clearTimeout(comunaTimeout);
+    
+    if (query.length < 2) {
+        hideSuggestions('comuna');
+        return;
+    }
+    
+    // Debounce para evitar muchas consultas
+    comunaTimeout = setTimeout(async () => {
+        try {
+            const response = await fetch(`/api/suggestions/comunas?q=${encodeURIComponent(query)}`);
+            const result = await response.json();
+            
+            if (result.success && result.suggestions) {
+                showSuggestions('comuna', result.suggestions, input);
+            }
+        } catch (error) {
+            console.error('Error obteniendo sugerencias de comunas:', error);
+        }
+    }, 300);
+}
+
+// Funciones para autocomplete de Región
+let regionTimeout;
+async function handleRegionInput(input) {
+    const query = input.value.trim();
+    
+    // Solo capitalizar si no contiene espacios múltiples o caracteres especiales
+    // Permitir espacios para regiones como "La Araucanía" y "Los Lagos"
+    const capitalized = capitalizeWordsPreservingSpaces(query);
+    if (input.value !== capitalized) {
+        const cursorPos = input.selectionStart;
+        input.value = capitalized;
+        input.setSelectionRange(cursorPos, cursorPos);
+    }
+    
+    // Limpiar timeout anterior
+    clearTimeout(regionTimeout);
+    
+    if (query.length < 2) {
+        hideSuggestions('region');
+        return;
+    }
+    
+    // Debounce para evitar muchas consultas
+    regionTimeout = setTimeout(async () => {
+        try {
+            const response = await fetch(`/api/suggestions/regiones?q=${encodeURIComponent(query)}`);
+            const result = await response.json();
+            
+            if (result.success && result.suggestions) {
+                showSuggestions('region', result.suggestions, input);
+            }
+        } catch (error) {
+            console.error('Error obteniendo sugerencias de regiones:', error);
+        }
+    }, 300);
+}
+
+// Función para capitalizar palabras preservando espacios
+function capitalizeWordsPreservingSpaces(str) {
+    // Preservar espacios múltiples y solo capitalizar palabras reales
+    return str.replace(/\b\w+/g, function(word) {
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    });
+}
+
+// Función para capitalizar palabras (mantener compatibilidad)
+function capitalizeWords(str) {
+    return capitalizeWordsPreservingSpaces(str);
+}
+
+// Mostrar sugerencias
+function showSuggestions(type, suggestions, inputElement) {
+    const suggestionsContainer = document.getElementById(`${type}-suggestions`);
+    
+    if (suggestions.length === 0) {
+        hideSuggestions(type);
+        return;
+    }
+    
+    suggestionsContainer.innerHTML = '';
+    
+    suggestions.forEach(suggestion => {
+        const suggestionItem = document.createElement('div');
+        suggestionItem.className = 'px-3 py-2 cursor-pointer hover:bg-amber-50 text-sm';
+        suggestionItem.textContent = suggestion;
+        
+        suggestionItem.addEventListener('mousedown', (e) => {
+            e.preventDefault(); // Prevenir que se active onblur antes del click
+            inputElement.value = suggestion;
+            hideSuggestions(type);
+            inputElement.focus();
+        });
+        
+        suggestionsContainer.appendChild(suggestionItem);
+    });
+    
+    suggestionsContainer.classList.remove('hidden');
+}
+
+// Ocultar sugerencias
+function hideSuggestions(type) {
+    setTimeout(() => {
+        const suggestionsContainer = document.getElementById(`${type}-suggestions`);
+        if (suggestionsContainer) {
+            suggestionsContainer.classList.add('hidden');
+        }
+    }, 150); // Pequeño delay para permitir clicks en sugerencias
 }
 
 // Funciones para gestión de ubicaciones
@@ -635,40 +767,6 @@ function showToast(message, type = 'info') {
     const toast = document.getElementById('toast');
     const icon = document.getElementById('toast-icon');
     const messageEl = document.getElementById('toast-message');
-    
-    // Initialize on page load
-    document.addEventListener('DOMContentLoaded', function() {
-        // Show first tab by default
-        showTab('usuarios');
-        
-        // Botón usando UUID real del usuario (pasado desde Flask)
-        const backButton = document.getElementById('backToProfile');
-        if (backButton) {
-            backButton.addEventListener('click', function(e) {
-                e.preventDefault();
-                
-                // Usar el user_id pasado desde Flask
-                const userId = '{{ user_id }}';
-                if (userId && userId !== 'None') {
-                    window.location.href = `/profile/${userId}`;
-                } else {
-                    // Fallback a obtener desde el backend si no está disponible
-                    fetch('/api/user/current')
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.success && data.user_id) {
-                                window.location.href = `/profile/${data.user_id}`;
-                            } else {
-                                window.location.href = '/';
-                            }
-                        })
-                        .catch(() => {
-                            window.location.href = '/';
-                        });
-                }
-            });
-        }
-    });
 
     // Set icon and colors based on type
     if (type === 'success') {
@@ -822,5 +920,16 @@ function goToProfile() {
         window.location.href = '/profile';
     }
 }
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    showTab('usuarios'); // Show first tab by default
+    
+    // Precargar datos de todas las pestañas
+    setTimeout(() => {
+        loadTabData('info_contacto');
+        loadTabData('ubicaciones');
+    }, 500);
+});
 </script>
 {% endblock %}

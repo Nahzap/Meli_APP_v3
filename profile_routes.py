@@ -29,19 +29,39 @@ def profile(user_id):
     - user_id: Puede ser el UUID completo, segmento de 8 caracteres, o username
     """
     try:
-        # Usar función centralizada para buscar usuario
-        user_info = searcher.find_user_by_identifier(user_id)
+        logger.info(f"[DEBUG /profile] Cargando perfil para user_id: {user_id}")
         
-        if not user_info:
-            return render_template('pages/profile.html', error="Usuario no encontrado", user=None)
+        # Si user_id parece ser un UUID completo, usarlo directamente
+        if len(user_id) == 36 and user_id.count('-') == 4:
+            logger.info(f"[DEBUG /profile] Detectado UUID completo, usando directamente")
+            user_uuid = user_id
+            # Verificar que el usuario existe
+            user_response = db.client.table('usuarios').select('*').eq('auth_user_id', user_uuid).single().execute()
+            if not user_response.data:
+                logger.warning(f"[DEBUG /profile] Usuario no encontrado con UUID: {user_uuid}")
+                return render_template('pages/profile.html', error="Usuario no encontrado", user=None)
+            user_info = user_response.data
+        else:
+            # Usar función centralizada para buscar usuario por otros identificadores
+            logger.info(f"[DEBUG /profile] Buscando usuario por identificador: {user_id}")
+            user_info = searcher.find_user_by_identifier(user_id)
             
-        user_uuid = user_info['auth_user_id']
+            if not user_info:
+                logger.warning(f"[DEBUG /profile] Usuario no encontrado con identificador: {user_id}")
+                return render_template('pages/profile.html', error="Usuario no encontrado", user=None)
+                
+            user_uuid = user_info['auth_user_id']
+        
+        logger.info(f"[DEBUG /profile] Obteniendo datos completos para UUID: {user_uuid}")
         
         # Obtener información completa del usuario usando función centralizada
         profile_data = searcher.get_user_profile_data(user_uuid)
         
         if not profile_data:
+            logger.warning(f"[DEBUG /profile] No se pudieron obtener datos de perfil para: {user_uuid}")
             return render_template('pages/profile.html', error="Usuario no encontrado", user=None)
+        
+        logger.info(f"[DEBUG /profile] Datos de perfil obtenidos exitosamente: {list(profile_data.keys())}")
             
         # Si el ID proporcionado no es el UUID completo, redirigir
         if user_id != user_uuid:

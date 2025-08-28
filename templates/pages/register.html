@@ -14,18 +14,18 @@
             <div class="p-6">
                 <!-- Formulario de registro tradicional -->
                 <form id="registerForm" class="space-y-6">
-                    <!-- Username - Campo requerido -->
+                    <!-- Nombre Completo - Campo requerido -->
                     <div>
-                        <label for="username" class="block text-sm font-medium text-gray-700">
-                            Nombre de usuario
+                        <label for="nombre_completo" class="block text-sm font-medium text-gray-700">
+                            Nombre completo
                             <span class="text-red-500">*</span>
                         </label>
-                        <input type="text" id="username" name="username" required 
+                        <input type="text" id="nombre_completo" name="nombre_completo" required 
                                class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500"
-                               placeholder="usuario123"
-                               minlength="3"
-                               maxlength="50">
-                        <p class="mt-1 text-xs text-gray-500">Mínimo 3 caracteres, solo letras y números</p>
+                               placeholder="Juan Pérez González"
+                               minlength="2"
+                               maxlength="150">
+                        <p class="mt-1 text-xs text-gray-500">Este será tu nombre de usuario</p>
                     </div>
 
                     <!-- Email -->
@@ -77,24 +77,6 @@
                                placeholder="••••••••">
                     </div>
 
-                    <!-- Nombre Completo -->
-                    <div>
-                        <label for="nombre_completo" class="block text-sm font-medium text-gray-700">
-                            Nombre completo
-                            <span class="text-red-500">*</span>
-                        </label>
-                        <input type="text" id="nombre_completo" name="nombre_completo" required
-                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500"
-                               placeholder="Juan Pérez">
-                    </div>
-
-                    <!-- Teléfono -->
-                    <div>
-                        <label for="telefono" class="block text-sm font-medium text-gray-700">Teléfono</label>
-                        <input type="tel" id="telefono" name="telefono"
-                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500"
-                               placeholder="+34 600 123 456">
-                    </div>
 
                     <!-- Tipo de Usuario -->
                     <div>
@@ -104,10 +86,11 @@
                         </label>
                         <select id="role" name="role" required
                                 class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-amber-500 focus:border-amber-500 bg-white">
-                            <option value="">Selecciona tu rol</option>
+                            <option value="">Selecciona tu tipo de usuario</option>
                             <option value="apicultor">🐝 Apicultor</option>
-                            <option value="consumidor">👤 Consumidor</option>
-                            <option value="distribuidor">📦 Distribuidor</option>
+                            <option value="prestador_servicios">🔧 Prestador de Servicios</option>
+                            <option value="proveedor">📦 Proveedor</option>
+                            <option value="regular">👤 Regular</option>
                         </select>
                     </div>
                     
@@ -166,7 +149,7 @@
 <script>
 // Validación en tiempo real
 const form = document.getElementById('registerForm');
-const username = document.getElementById('username');
+const nombreCompleto = document.getElementById('nombre_completo');
 const email = document.getElementById('email');
 const confirmEmail = document.getElementById('confirm_email');
 const password = document.getElementById('password');
@@ -196,16 +179,16 @@ function validateEmail(email) {
     return re.test(email);
 }
 
-function validateUsername(username) {
-    return /^[a-zA-Z0-9_]+$/.test(username);
+function validateNombreCompleto(nombre) {
+    return nombre.trim().length >= 2 && /^[a-zA-ZÀ-ÿ\u00f1\u00d1\s]+$/.test(nombre.trim());
 }
 
 // Validación en tiempo real
-username.addEventListener('blur', function() {
-    if (this.value.length < 3) {
-        showFieldError(this, 'El nombre de usuario debe tener al menos 3 caracteres');
-    } else if (!validateUsername(this.value)) {
-        showFieldError(this, 'Solo se permiten letras, números y guiones bajos');
+nombreCompleto.addEventListener('blur', function() {
+    if (this.value.trim().length < 2) {
+        showFieldError(this, 'El nombre completo debe tener al menos 2 caracteres');
+    } else if (!validateNombreCompleto(this.value)) {
+        showFieldError(this, 'Solo se permiten letras, espacios y acentos');
     } else {
         clearFieldError(this);
         this.classList.add('border-green-500');
@@ -282,8 +265,12 @@ form.addEventListener('submit', async (e) => {
     // Validación final
     const errors = [];
     
-    if (username.value.length < 3) {
-        errors.push('El nombre de usuario debe tener al menos 3 caracteres');
+    if (nombreCompleto.value.trim().length < 2) {
+        errors.push('El nombre completo debe tener al menos 2 caracteres');
+    }
+    
+    if (!validateNombreCompleto(nombreCompleto.value)) {
+        errors.push('El nombre completo solo puede contener letras, espacios y acentos');
     }
     
     if (!validateEmail(email.value)) {
@@ -314,12 +301,13 @@ form.addEventListener('submit', async (e) => {
     
     try {
         const formData = new FormData(form);
+        const nombreCompletoValue = formData.get('nombre_completo').trim();
         const data = {
-            username: formData.get('username'),
+            username: nombreCompletoValue, // Username = Nombre completo
             email: formData.get('email'),
             password: formData.get('password'),
-            nombre_completo: formData.get('nombre_completo'),
-            telefono: formData.get('telefono'),
+            nombre_completo: nombreCompletoValue,
+            telefono: '', // Campo no requerido
             role: formData.get('role')
         };
         
@@ -334,9 +322,9 @@ form.addEventListener('submit', async (e) => {
         const result = await response.json();
         
         if (response.ok) {
-            showSuccess('¡Cuenta creada exitosamente! Redirigiendo...');
+            showSuccess('¡Cuenta creada exitosamente! Redirigiendo a completar perfil...');
             setTimeout(() => {
-                window.location.href = '/login';
+                window.location.href = '/edit-profile';
             }, 2000);
         } else {
             showError(result.error || 'Error al crear la cuenta');

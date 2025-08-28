@@ -177,24 +177,80 @@ def buscar():
     """
     if request.method == 'POST':
         search_term = request.form.get('usuario_id', '').strip()
+        logger.info(f"[DEBUG /buscar] Término de búsqueda recibido: '{search_term}'")
+        
         if search_term:
             try:
-                # Buscar usuario por identificador usando función centralizada
+                # Primero buscar por nombre_completo en info_contacto (mismo método que las sugerencias)
+                logger.info(f"[DEBUG /buscar] Buscando por nombre_completo en info_contacto")
+                
+                # Buscar por coincidencia exacta (sin espacios extra)
+                try:
+                    contact_response = db.client.table('info_contacto') \
+                        .select('auth_user_id, nombre_completo') \
+                        .eq('nombre_completo', search_term) \
+                        .limit(1) \
+                        .execute()
+                    
+                    if contact_response.data:
+                        user_uuid = contact_response.data[0]['auth_user_id']
+                        logger.info(f"[DEBUG /buscar] Usuario encontrado por nombre_completo exacto: {user_uuid}")
+                        return redirect(url_for('profile.profile', user_id=user_uuid))
+                except Exception as exact_error:
+                    logger.info(f"[DEBUG /buscar] Búsqueda exacta falló: {str(exact_error)}")
+                
+                # Buscar ignorando espacios al inicio y final
+                try:
+                    trimmed_response = db.client.table('info_contacto') \
+                        .select('auth_user_id, nombre_completo') \
+                        .ilike('nombre_completo', f'{search_term.strip()}%') \
+                        .limit(1) \
+                        .execute()
+                    
+                    if trimmed_response.data:
+                        # Verificar si es una coincidencia exacta (ignorando espacios)
+                        found_name = trimmed_response.data[0]['nombre_completo'].strip()
+                        if found_name.lower() == search_term.strip().lower():
+                            user_uuid = trimmed_response.data[0]['auth_user_id']
+                            logger.info(f"[DEBUG /buscar] Usuario encontrado por nombre_completo (ignorando espacios): {user_uuid}")
+                            return redirect(url_for('profile.profile', user_id=user_uuid))
+                except Exception as trimmed_error:
+                    logger.info(f"[DEBUG /buscar] Búsqueda con trim falló: {str(trimmed_error)}")
+                
+                # Si no se encuentra por nombre exacto, buscar por identificador tradicional
+                logger.info(f"[DEBUG /buscar] Buscando por identificador tradicional")
                 user_info = searcher.find_user_by_identifier(search_term)
                 
                 if user_info:
                     user_uuid = user_info['auth_user_id']
+                    logger.info(f"[DEBUG /buscar] Usuario encontrado por identificador: {user_uuid}")
                     return redirect(url_for('profile.profile', user_id=user_uuid))
-                else:
-                    # También buscar por nombre/username
-                    search_results = searcher.search_users_by_query(search_term)
-                    if search_results:
-                        return render_template('pages/search.html', 
-                                           usuarios=search_results)
-                    return render_template('pages/search.html', 
-                                         error="Usuario no encontrado")
+                
+                # Búsqueda parcial por nombre_completo
+                logger.info(f"[DEBUG /buscar] Buscando parcialmente por nombre_completo")
+                partial_response = db.client.table('info_contacto') \
+                    .select('auth_user_id, nombre_completo') \
+                    .ilike('nombre_completo', f'%{search_term}%') \
+                    .limit(1) \
+                    .execute()
+                
+                if partial_response.data:
+                    user_uuid = partial_response.data[0]['auth_user_id']
+                    logger.info(f"[DEBUG /buscar] Usuario encontrado por búsqueda parcial: {user_uuid}")
+                    return redirect(url_for('profile.profile', user_id=user_uuid))
+                
+                # Fallback: buscar por username
+                logger.info(f"[DEBUG /buscar] Fallback: buscando por username")
+                search_results = searcher.search_users_by_query(search_term)
+                if search_results:
+                    logger.info(f"[DEBUG /buscar] Encontrados {len(search_results)} resultados por username")
+                    return render_template('pages/search.html', usuarios=search_results)
+                
+                logger.warning(f"[DEBUG /buscar] No se encontró usuario para: '{search_term}'")
+                return render_template('pages/search.html', error="Usuario no encontrado")
+                
             except Exception as e:
-                logger.error(f"Error en búsqueda: {str(e)}")
+                logger.error(f"[DEBUG /buscar] Error en búsqueda: {str(e)}", exc_info=True)
                 return render_template('pages/search.html', error="Error al buscar usuario")
     
     return redirect(url_for('search_web.search'))
@@ -251,45 +307,63 @@ def sugerir():
             logger.error(f"[DEBUG /sugerir] Error de conexión BD: {str(conn_error)}")
             return jsonify({"error": "Error de conexión a base de datos"}), 500
             
-        # Búsqueda principal - intentar usuarios primero
-        logger.info(f"[DEBUG /sugerir] Ejecutando query: usuarios.select('auth_user_id, username, tipo_usuario, status').ilike('username', '%{termino}%').limit(10)")
+        # Búsqueda principal - buscar por nombre_completo en info_contacto
+        logger.info(f"[DEBUG /sugerir] Ejecutando query JOIN para obtener datos completos")
         
-        response = searcher.supabase.table('usuarios') \
-            .select('auth_user_id, username, tipo_usuario, status') \
-            .ilike('username', f'%{termino}%') \
-            .limit(10) \
-            .execute()
+        try:            
+            # Debug: Primero verificar que hay datos en la tabla con el cliente directo
+            test_all = db.client.table('info_contacto') \
+                .select('auth_user_id, nombre_completo') \
+                .limit(3) \
+                .execute()
+            logger.info(f"[DEBUG /sugerir] Test general (cliente directo): {len(test_all.data) if test_all.data else 0} registros totales")
+            if test_all.data:
+                logger.info(f"[DEBUG /sugerir] Primer registro: {test_all.data[0]}")
             
-        logger.info(f"[DEBUG /sugerir] Response recibido. Tipo: {type(response)}")
-        logger.info(f"[DEBUG /sugerir] Response.data existe: {hasattr(response, 'data')}")
-        
-        users = response.data if hasattr(response, 'data') else []
-        logger.info(f"[DEBUG /sugerir] Usuarios encontrados: {len(users)}")
-        
-        # Si no hay usuarios, buscar en info_contacto como fallback
-        if not users:
-            logger.info(f"[DEBUG /sugerir] No hay usuarios, buscando en info_contacto...")
-            try:
-                info_response = searcher.supabase.table('info_contacto') \
-                    .select('auth_user_id, nombre_completo, nombre_empresa') \
-                    .ilike('nombre_completo', f'%{termino}%') \
-                    .limit(10) \
-                    .execute()
+            # Query con ilike usando cliente directo
+            logger.info(f"[DEBUG /sugerir] Ejecutando con cliente directo: .ilike('nombre_completo', '%{termino}%')")
+            response = db.client.table('info_contacto') \
+                .select('auth_user_id, nombre_completo, nombre_empresa') \
+                .ilike('nombre_completo', f'%{termino}%') \
+                .limit(10) \
+                .execute()
                 
-                if info_response.data:
-                    logger.info(f"[DEBUG /sugerir] Encontrados {len(info_response.data)} registros en info_contacto")
-                    # Convertir info_contacto a formato de usuarios
-                    for contact in info_response.data:
-                        users.append({
-                            'auth_user_id': contact['auth_user_id'],
-                            'username': contact.get('nombre_completo', ''),
-                            'tipo_usuario': 'Apicultor',
-                            'status': 'active'
-                        })
-                else:
-                    logger.info("[DEBUG /sugerir] Tampoco hay registros en info_contacto")
-            except Exception as info_error:
-                logger.error(f"[DEBUG /sugerir] Error buscando en info_contacto: {str(info_error)}")
+            logger.info(f"[DEBUG /sugerir] Response ilike (cliente directo): {len(response.data) if response.data else 0} resultados")
+            
+            contacts = response.data if hasattr(response, 'data') else []
+            logger.info(f"[DEBUG /sugerir] Contactos finales encontrados: {len(contacts)}")
+            
+            if contacts:
+                logger.info(f"[DEBUG /sugerir] Primer contacto encontrado: {contacts[0]}")
+                
+        except Exception as query_error:
+            logger.error(f"[DEBUG /sugerir] Error en query info_contacto: {str(query_error)}")
+            contacts = []
+        
+        # Convertir contactos a formato de usuarios para mantener compatibilidad
+        users = []
+        for contact in contacts:
+            # Obtener tipo_usuario de la tabla usuarios usando cliente directo
+            tipo_usuario = 'Usuario'
+            try:
+                user_response = db.client.table('usuarios') \
+                    .select('tipo_usuario') \
+                    .eq('auth_user_id', contact['auth_user_id']) \
+                    .single() \
+                    .execute()
+                if user_response.data:
+                    tipo_usuario = user_response.data.get('tipo_usuario', 'Usuario')
+            except:
+                pass  # Usar valor por defecto si no se encuentra
+            
+            users.append({
+                'auth_user_id': contact['auth_user_id'],
+                'username': contact['nombre_completo'],  # Usar nombre_completo como username para compatibilidad
+                'tipo_usuario': tipo_usuario,
+                'status': 'active'
+            })
+        
+        logger.info(f"[DEBUG /sugerir] Usuarios procesados: {len(users)}")
         
         if users:
             logger.info(f"[DEBUG /sugerir] Primer usuario: {users[0]}")
