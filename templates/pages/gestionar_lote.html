@@ -320,6 +320,7 @@
                         <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
                         <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Temporada</th>
                         <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha Origen</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Última Actualización</th>
                         <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kilogramos</th>
                         <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Composición</th>
                         <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
@@ -328,7 +329,7 @@
                 <tbody id="lotes-tbody" class="divide-y divide-gray-200">
                     <!-- Los lotes se cargarán dinámicamente -->
                     <tr class="hover:bg-gray-50">
-                        <td class="px-4 py-4 text-center text-sm text-gray-500" colspan="7">
+                        <td class="px-4 py-4 text-center text-sm text-gray-500" colspan="8">
                             No hay lotes registrados aún. Crea tu primer lote arriba.
                         </td>
                     </tr>
@@ -373,6 +374,7 @@ class LoteManager {
         this.loteIdSpan = document.getElementById('lote-id');
         this.editingLoteId = null;
         this.currentLoteData = null;
+        this.lotes = []; // Almacenar los lotes cargados
         
         this.init();
     }
@@ -396,6 +398,7 @@ class LoteManager {
     }
 
     resetForm() {
+        console.log('🔄 DEBUG: Reseteando formulario');
         this.form.reset();
         this.resultContainer.style.display = 'none';
         this.alertContainer.innerHTML = '';
@@ -403,6 +406,18 @@ class LoteManager {
         this.currentLoteData = null;
         this.enableDateFields();
         document.querySelector('.submit-text').textContent = 'Guardar Lote';
+        
+        // Limpiar composición y agregar una fila vacía para modo nuevo
+        const composicionContainer = document.getElementById('composicion-container');
+        if (composicionContainer) {
+            composicionContainer.innerHTML = '';
+            // Esperar un momento para que las especies estén disponibles
+            setTimeout(() => {
+                this.addComposicionRow(); // Agregar fila vacía para nuevo registro
+            }, 100);
+        }
+        
+        console.log('✅ DEBUG: Formulario reseteado para modo NUEVO');
     }
 
     // ===== VALIDACIONES =====
@@ -496,7 +511,10 @@ class LoteManager {
 
         // Agregar composición - EVENTO ÚNICO Y ROBUSTO
         document.addEventListener('click', (e) => {
+            console.log('🔍 DEBUG: Click detectado en:', e.target.id, e.target.tagName);
             if (e.target && e.target.id === 'add-composicion') {
+                console.log('DEBUG: Botón Add Composición clickeado');
+                console.log('DEBUG: Modo actual:', this.editingLoteId ? 'EDICIÓN' : 'NUEVO');
                 e.preventDefault();
                 e.stopPropagation();
                 this.addComposicionRow();
@@ -516,6 +534,31 @@ class LoteManager {
         document.getElementById('btn-confirm-delete').addEventListener('click', (e) => {
             const loteId = e.target.getAttribute('data-lote-id');
             if (loteId) this.performDelete(loteId);
+        });
+
+        // Delegación de eventos para botones de editar y eliminar
+        document.getElementById('lotes-tbody').addEventListener('click', (e) => {
+            const target = e.target;
+            console.log('🔥 DEBUG: Click detectado en tabla, target:', target);
+            console.log('🔥 DEBUG: Clases del target:', target.classList.toString());
+            
+            if (target.classList.contains('btn-edit')) {
+                console.log('✏️ DEBUG: Botón EDITAR clickeado');
+                e.preventDefault();
+                const loteId = target.getAttribute('data-lote-id');
+                console.log('✏️ DEBUG: ID del lote a editar:', loteId);
+                this.editLote(loteId);
+            }
+            
+            if (target.classList.contains('btn-delete')) {
+                console.log('🗑️ DEBUG: Botón ELIMINAR clickeado');
+                e.preventDefault();
+                const loteId = target.getAttribute('data-lote-id');
+                const loteNombre = target.getAttribute('data-lote-nombre');
+                const loteOrden = target.getAttribute('data-lote-orden');
+                console.log('🗑️ DEBUG: Datos del lote a eliminar:', { loteId, loteNombre, loteOrden });
+                this.confirmDelete(loteId, loteNombre, loteOrden);
+            }
         });
     }
 
@@ -578,30 +621,74 @@ class LoteManager {
         zonaInfo.className = classes[type];
     }
 
-    addComposicionRow() {
-        // PROCESO ÚNICO Y ROBUSTO - Sin duplicados
-        const container = document.getElementById('composicion-container');
-        const zonaSelect = document.getElementById('especies-zona');
+    addComposicionRow(tipo = '', porcentaje = '') {
+        console.log('🌿 DEBUG: addComposicionRow llamado con:', { tipo, porcentaje });
+        console.log('🌿 DEBUG: Modo actual - editingLoteId:', this.editingLoteId);
         
-        if (!container || !zonaSelect) {
-            console.error('❌ Elementos no encontrados');
+        const container = document.getElementById('composicion-container');
+        const especiesZona = document.getElementById('especies-zona');
+        
+        if (!container) {
+            console.error('❌ DEBUG: No se encontró composicion-container');
             return;
         }
         
-        // Crear exactamente UN slot para especies
+        if (!especiesZona) {
+            console.error('❌ DEBUG: No se encontró especies-zona');
+            return;
+        }
+        
+        if (!especiesZona.innerHTML || especiesZona.children.length <= 1) {
+            console.warn('⚠️ DEBUG: especies-zona está vacío o sin opciones');
+            console.log('🌿 DEBUG: Contenido de especies-zona:', especiesZona.innerHTML);
+        }
+        
         const newRow = document.createElement('div');
         newRow.className = 'flex items-center space-x-2 composicion-fila';
-        newRow.innerHTML = `
-            <select class="composicion-tipo form-input flex-1">
-                ${zonaSelect.innerHTML}
-            </select>
-            <input type="number" class="composicion-porcentaje form-input w-24" 
-                   placeholder="%" min="0" max="100" step="1" value="">
-            <button type="button" class="btn-remove-composicion text-red-600 hover:text-red-800">✕</button>
-        `;
         
-        // Agregar sin límite - exactamente 1 slot por click
+        const select = document.createElement('select');
+        select.className = 'composicion-tipo form-input flex-1';
+        select.innerHTML = especiesZona.innerHTML;
+        
+        // Establecer el valor después de agregar las opciones
+        if (tipo) {
+            console.log('🌿 DEBUG: Estableciendo tipo:', tipo);
+            // Buscar la opción exacta o similar
+            let optionFound = false;
+            for (let option of select.options) {
+                if (option.value === tipo || option.textContent.includes(tipo)) {
+                    select.value = option.value;
+                    optionFound = true;
+                    console.log('✅ DEBUG: Tipo establecido exitosamente:', option.value);
+                    break;
+                }
+            }
+            if (!optionFound) {
+                console.warn('⚠️ DEBUG: No se encontró opción para tipo:', tipo);
+                console.log('🌿 DEBUG: Opciones disponibles:', Array.from(select.options).map(o => o.value));
+            }
+        }
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'composicion-porcentaje form-input w-24';
+        input.placeholder = '%';
+        input.min = 0;
+        input.max = 100;
+        input.step = 1;
+        input.value = porcentaje;
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn-remove-composicion text-red-600 hover:text-red-800';
+        removeBtn.innerHTML = '✕';
+
+        newRow.appendChild(select);
+        newRow.appendChild(input);
+        newRow.appendChild(removeBtn);
         container.appendChild(newRow);
+        
+        console.log('✅ DEBUG: Fila de composición agregada exitosamente');
     }
 
     // ===== ENVÍO DE FORMULARIO =====
@@ -690,7 +777,9 @@ class LoteManager {
                     this.showAlert(mensaje, 'success');
                     
                     if (isEditing) {
+                        console.log('✅ DEBUG: Lote actualizado, regresando a modo NUEVO');
                         this.resetForm();
+                        this.loadLotes(); // Recargar la tabla
                     } else {
                         this.loteIdSpan.textContent = result.loteId;
                         // Mostrar el UUID completo como orden para que el apicultor vea que es serio
@@ -721,7 +810,46 @@ class LoteManager {
         }, 100); // 100ms de debounce
     }
 
+    formatDate(dateString) {
+        if (!dateString) return 'N/A';
+        const date = new Date(dateString);
+        if (isNaN(date)) return 'Fecha inválida';
+        // Ajustar por zona horaria para evitar problemas de un día menos
+        const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+        const adjustedDate = new Date(date.getTime() + userTimezoneOffset);
+        return adjustedDate.toLocaleDateString('es-CL', { year: 'numeric', month: '2-digit', day: '2-digit' });
+    }
+
+    formatKg(kg) {
+        return parseFloat(kg).toFixed(2);
+    }
+
+    disableDateFields() {
+        document.getElementById('dia_registro').disabled = true;
+        document.getElementById('mes_registro').disabled = true;
+        document.getElementById('anio_registro').disabled = true;
+        document.getElementById('fecha-hoy').disabled = true;
+    }
+
+    enableDateFields() {
+        document.getElementById('dia_registro').disabled = false;
+        document.getElementById('mes_registro').disabled = false;
+        document.getElementById('anio_registro').disabled = false;
+        document.getElementById('fecha-hoy').disabled = false;
+        
+        // Restaurar estilo visual
+        ['dia_registro', 'mes_registro', 'anio_registro'].forEach(id => {
+            const field = document.getElementById(id);
+            field.style.backgroundColor = '';
+            field.style.cursor = '';
+            field.style.pointerEvents = ''; // Restaurar interactividad
+        });
+        const fechaHoyBtn = document.getElementById('fecha-hoy');
+        if (fechaHoyBtn) fechaHoyBtn.style.display = 'inline';
+    }
+
     // ===== GESTIÓN DE LOTES =====
+
     async loadLotes() {
         try {
             const usuarioId = document.getElementById('usuario_id').value;
@@ -732,18 +860,16 @@ class LoteManager {
             
             const tbody = document.getElementById('lotes-tbody');
             tbody.innerHTML = '';
+            this.lotes = data.success ? data.lotes : (Array.isArray(data) ? data : []); // Guardar los lotes en la instancia
             
-            const lotes = data.success ? data.lotes : (Array.isArray(data) ? data : []);
-
-            
-            if (!lotes || lotes.length === 0) {
+            if (!this.lotes || this.lotes.length === 0) {
                 tbody.innerHTML = `
                     <tr><td class="px-4 py-4 text-center text-sm text-gray-500" colspan="7">
                         No hay lotes registrados aún. Crea tu primer lote arriba.
                     </td></tr>
                 `;
             } else {
-                lotes.forEach(lote => {
+                this.lotes.forEach(lote => {
                     const tr = document.createElement('tr');
                     tr.className = 'hover:bg-gray-50';
                     tr.innerHTML = `
@@ -751,13 +877,13 @@ class LoteManager {
                         <td class="px-4 py-2 text-sm font-medium text-gray-900">${lote.nombre_miel || 'Sin nombre'}</td>
                         <td class="px-4 py-2 text-sm text-gray-900">${lote.temporada || 'N/A'}</td>
                         <td class="px-4 py-2 text-sm text-gray-900">${this.formatDate(lote.fecha_registro)}</td>
+                        <td class="px-4 py-2 text-sm text-gray-900">${this.formatDate(lote.fecha_actualizacion)}</td>
                         <td class="px-4 py-2 text-sm text-gray-900 font-mono">${this.formatKg(lote.kg_producidos || 0)} kg</td>
                         <td class="px-4 py-2 text-sm text-gray-900">${lote.composicion || 'Sin datos'}</td>
                         <td class="px-4 py-2 text-sm text-gray-900">
-                            <button onclick="loteManager.editLote('${lote.id}')" class="text-blue-600 hover:text-blue-800 mr-2">Editar</button>
-                            <button onclick="loteManager.deleteLote('${lote.id}')" class="text-red-600 hover:text-red-800">Eliminar</button>
+                            <button class="text-blue-600 hover:text-blue-800 underline bg-transparent border-none cursor-pointer btn-edit" data-lote-id="${lote.id}">Editar</button>
+                            <button class="text-red-600 hover:text-red-800 underline bg-transparent border-none cursor-pointer ml-3 btn-delete" data-lote-id="${lote.id}" data-lote-nombre="${lote.nombre_miel}" data-lote-orden="${lote.orden_miel}">Eliminar</button>
                         </td>
-                    </tr>
                     `;
                     tbody.appendChild(tr);
                 });
@@ -765,42 +891,131 @@ class LoteManager {
         } catch (error) {
             const tbody = document.getElementById('lotes-tbody');
             tbody.innerHTML = `
-                <tr><td class="px-4 py-4 text-center text-sm text-red-500" colspan="7">
+                <tr><td class="px-4 py-4 text-center text-sm text-red-500" colspan="8">
                     Error al cargar lotes. ${error.message}
                 </td></tr>
             `;
         }
     }
 
-
     async editLote(loteId) {
-        try {
-            const response = await fetch(`/api/lote/${loteId}`);
-            const result = await response.json();
-            
-            if (result.success) {
-                const lote = result.data;
-                this.editingLoteId = loteId;
-                this.currentLoteData = lote;
-                
-                document.getElementById('nombre_miel').value = lote.nombre_miel || '';
-                document.getElementById('kg_producidos').value = lote.kg_producidos || '';
-                document.getElementById('orden_miel').value = lote.orden_miel || '';
-                
-                this.preloadTemporadas(lote.temporada);
-                this.preloadComposicion(lote.composicion);
-                
-                document.querySelector('.submit-text').textContent = 'Actualizar Lote';
-                this.disableDateFields();
-                
-                this.form.scrollIntoView({ behavior: 'smooth' });
-                this.showAlert('Lote cargado para edición. La fecha de registro no puede modificarse.', 'success');
-            } else {
-                this.showAlert('Error al cargar el lote: ' + result.error, 'error');
-            }
-        } catch (error) {
-            this.showAlert('Error de conexión al cargar el lote', 'error');
+        console.log('✏️ DEBUG: Iniciando edición de lote ID:', loteId);
+        console.log('✏️ DEBUG: Lotes disponibles:', this.lotes.length);
+        const lote = this.lotes.find(l => l.id === loteId);
+        if (!lote) {
+            console.log('❌ DEBUG: No se encontró el lote con ID:', loteId);
+            this.showAlert('No se encontró el lote para editar', 'error');
+            return;
         }
+        console.log('✅ DEBUG: Lote encontrado:', lote);
+
+        this.resetForm();
+
+        // Rellenar campos principales
+        document.getElementById('nombre_miel').value = lote.nombre_miel || '';
+        document.getElementById('orden_miel').value = lote.orden_miel || '';
+        document.getElementById('kg_producidos').value = lote.kg_producidos || '';
+        
+        // Extraer año de cosecha desde fecha_actualizacion si no existe anio_cosecha
+        let anioCosecha = lote.anio_cosecha;
+        if (!anioCosecha && lote.fecha_actualizacion) {
+            const fechaActualizacion = lote.fecha_actualizacion.split('-');
+            if (fechaActualizacion.length >= 1) {
+                anioCosecha = parseInt(fechaActualizacion[0]);
+            }
+        }
+        document.getElementById('anio_cosecha').value = anioCosecha || '';
+
+        // Rellenar campos de fecha de registro (solo para mostrar, no editar)
+        if (lote.fecha_registro) {
+            // Parsear fecha como string para evitar problemas de zona horaria
+            const fechaParts = lote.fecha_registro.split('-');
+            if (fechaParts.length === 3) {
+                const anio = parseInt(fechaParts[0]);
+                const mes = parseInt(fechaParts[1]);
+                const dia = parseInt(fechaParts[2]);
+                
+                document.getElementById('dia_registro').value = dia;
+                document.getElementById('mes_registro').value = mes;
+                document.getElementById('anio_registro').value = anio;
+            }
+        }
+
+        // Marcar checkboxes de temporadas
+        document.querySelectorAll('.temporada-checkbox').forEach(cb => cb.checked = false);
+        if (lote.temporada) {
+            const temporadas = lote.temporada.split(' - ');
+            temporadas.forEach(t => {
+                const checkbox = document.querySelector(`.temporada-checkbox[value="${t}"]`);
+                if (checkbox) checkbox.checked = true;
+            });
+        }
+
+        // Rellenar composición de polen
+        console.log('🌿 DEBUG: Composición del lote:', lote.composicion);
+        const composicionContainer = document.getElementById('composicion-container');
+        composicionContainer.innerHTML = ''; // Limpiar filas existentes
+        
+        // Verificar que las especies estén cargadas antes de procesar
+        const waitForSpecies = () => {
+            const especiesZona = document.getElementById('especies-zona');
+            if (!especiesZona || especiesZona.children.length <= 1) {
+                console.log('🌿 DEBUG: Esperando que las especies se carguen...');
+                setTimeout(waitForSpecies, 100);
+                return;
+            }
+            
+            console.log('🌿 DEBUG: Especies cargadas para MODO EDICIÓN, procesando composición');
+            if (lote.composicion && lote.composicion !== 'Sin datos' && lote.composicion.trim() !== '') {
+                console.log('🌿 DEBUG: Composición válida encontrada:', lote.composicion);
+                const composiciones = lote.composicion.split(', ');
+                console.log('🌿 DEBUG: Composiciones divididas:', composiciones);
+                composiciones.forEach((c, index) => {
+                    const [tipo, porcentaje] = c.split(':');
+                    console.log(`🌿 DEBUG: Procesando composición ${index + 1}: tipo='${tipo}', porcentaje='${porcentaje}'`);
+                    if (tipo && porcentaje) {
+                        this.addComposicionRow(tipo.trim(), porcentaje.trim());
+                    }
+                });
+            } else {
+                console.log('🌿 DEBUG: No hay composición válida en MODO EDICIÓN, agregando fila vacía');
+                this.addComposicionRow(); // Agregar una fila vacía si no hay composición
+            }
+        };
+        
+        waitForSpecies();
+
+        // Deshabilitar campos de fecha para evitar modificaciones
+        this.disableDateFields();
+        
+        // Cambiar estilo visual para indicar que están deshabilitados y ocultar completamente
+        ['dia_registro', 'mes_registro', 'anio_registro'].forEach(id => {
+            const field = document.getElementById(id);
+            field.style.backgroundColor = '#f3f4f6';
+            field.style.cursor = 'not-allowed';
+            field.style.pointerEvents = 'none'; // Completamente no interactivo
+        });
+        // Ocultar completamente el botón "Usar fecha de hoy" durante edición
+        const fechaHoyBtn = document.getElementById('fecha-hoy');
+        if (fechaHoyBtn) fechaHoyBtn.style.display = 'none';
+
+        // Configurar modo de edición
+        this.editingLoteId = loteId;
+        document.querySelector('.submit-text').textContent = 'Actualizar Lote';
+        
+        // Asegurar que el botón Add Species esté visible durante edición
+        const addBtn = document.getElementById('add-composicion');
+        if (addBtn) {
+            addBtn.style.display = 'inline-block';
+            console.log('✅ DEBUG: Botón Add Species visible durante edición');
+        } else {
+            console.error('❌ DEBUG: No se encontró el botón add-composicion');
+        }
+        
+        this.form.scrollIntoView({ behavior: 'smooth' });
+        this.showAlert('Editando lote. La fecha de registro no se puede cambiar.', 'info');
+        
+        console.log('✅ DEBUG: Formulario configurado para MODO EDICIÓN');
     }
 
     async deleteLote(loteId) {
@@ -897,34 +1112,39 @@ class LoteManager {
     }
     
     async performDelete(loteId) {
+        console.log('🗑️ DEBUG: Ejecutando eliminación de lote ID:', loteId);
         this.closeModal();
-        
         try {
-            console.log('📤 Enviando solicitud DELETE a /api/lote/' + loteId);
-            const response = await fetch(`/api/lote/${loteId}`, { 
+            console.log('🗑️ DEBUG: Enviando DELETE request a /api/lote/' + loteId);
+            const response = await fetch(`/api/lote/${loteId}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json'
                 }
             });
-            
-            console.log('📥 Respuesta recibida:', response.status, response.statusText);
+            console.log('🗑️ DEBUG: Respuesta recibida:', response.status, response.statusText);
             const result = await response.json();
-            console.log('📄 Datos recibidos:', result);
-            
+            console.log('🗑️ DEBUG: Resultado:', result);
             if (result.success) {
                 this.showAlert('Lote eliminado exitosamente', 'success');
                 this.loadLotes();
             } else {
-                console.error('❌ Error al eliminar lote:', result.error);
-                this.showAlert('Error al eliminar el lote: ' + result.error, 'error');
+                this.showAlert(result.error || 'Error al eliminar el lote', 'error');
             }
         } catch (error) {
-            console.error('❌ Excepción al eliminar lote:', error);
-            this.showAlert('Error de conexión al eliminar el lote: ' + error.message, 'error');
+            console.error('❌ DEBUG: Error en performDelete:', error);
+            this.showAlert('Error de conexión: ' + error.message, 'error');
         }
     }
 
+    confirmDelete(loteId, nombre, orden) {
+        console.log('🗑️ DEBUG: Confirmando eliminación de lote:', { loteId, nombre, orden });
+        document.getElementById('modal-lote-nombre').textContent = nombre;
+        document.getElementById('modal-lote-orden').textContent = orden;
+        document.getElementById('btn-confirm-delete').setAttribute('data-lote-id', loteId);
+        document.getElementById('delete-modal-overlay').classList.add('active');
+        console.log('🗑️ DEBUG: Modal de eliminación abierto');
+    }
 
     // ===== UTILIDADES DE EDICIÓN =====
     preloadTemporadas(temporadas) {
