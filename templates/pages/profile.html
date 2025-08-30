@@ -5,18 +5,18 @@
 
 {% block content %}
 <!-- SECCIÓN 1: Información del Perfil - Listón Horizontal -->
-<section class="bg-gradient-to-r from-primary to-amber-600">
+<section class="bg-gradient-to-r from-primary to-amber-600 dark:from-amber-600 dark:to-amber-700">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {% if user or contact_info %}
         <div class="flex items-center justify-center space-x-8">
             <!-- Avatar -->
             <div class="relative flex-shrink-0">
-                <div class="w-24 h-24 rounded-full border-4 border-white shadow-lg bg-gradient-to-br from-primary to-amber-600 flex items-center justify-center">
+                <div class="w-24 h-24 rounded-full border-4 border-white dark:border-slate-200 shadow-lg bg-gradient-to-br from-primary to-amber-600 dark:from-amber-500 dark:to-amber-600 flex items-center justify-center">
                     <span class="text-3xl font-bold text-white">
                         {{ (user.nombre_completo or user.nombre or user.username or 'U')[:2].upper() }}
                     </span>
                 </div>
-                <div class="absolute bottom-0 right-0 w-6 h-6 bg-green-500 rounded-full border-2 border-white flex items-center justify-center">
+                <div class="absolute bottom-0 right-0 w-6 h-6 bg-green-500 dark:bg-green-400 rounded-full border-2 border-white dark:border-slate-200 flex items-center justify-center">
                     <span class="text-white text-xs">✓</span>
                 </div>
             </div>
@@ -28,8 +28,8 @@
             
             <!-- Rol y Ubicación -->
             <div class="text-center">
-                <p class="text-xl text-amber-100 font-semibold">{{ user.role or 'Apicultor' }}</p>
-                <p class="text-sm text-amber-200 mt-1">
+                <p class="text-xl text-amber-100 dark:text-amber-200 font-semibold">{{ user.role or 'Apicultor' }}</p>
+                <p class="text-sm text-amber-200 dark:text-amber-300 mt-1">
                     {% if user.comuna and user.region %}
                         {{ user.comuna }}, {{ user.region }}
                     {% elif user.comuna %}
@@ -44,12 +44,12 @@
         </div>
         {% else %}
         <div class="flex items-center justify-center space-x-8">
-            <div class="w-24 h-24 bg-slate-300 rounded-full flex items-center justify-center">
-                <span class="text-3xl font-bold text-slate-500">?</span>
+            <div class="w-24 h-24 bg-slate-300 dark:bg-slate-600 rounded-full flex items-center justify-center">
+                <span class="text-3xl font-bold text-slate-500 dark:text-slate-300">?</span>
             </div>
             <div class="text-center">
                 <h1 class="text-3xl font-bold text-white">Usuario no encontrado</h1>
-                <p class="text-xl text-amber-100">El usuario que buscas no existe</p>
+                <p class="text-xl text-amber-100 dark:text-amber-200">El usuario que buscas no existe</p>
             </div>
         </div>
         {% endif %}
@@ -57,7 +57,7 @@
 </section>
 
 <!-- SECCIÓN 2: Gráfico Botánico - Listón Horizontal Completo -->
-<section class="bg-white py-8">
+<section class="bg-white dark:bg-slate-800 py-8 transition-colors duration-300">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div id="botanical-chart-container" 
              class="w-full"
@@ -65,7 +65,7 @@
             <div class="flex-1 flex items-center justify-center py-8">
                 <div class="text-center">
                     <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-                    <p class="text-gray-600">Cargando gráfico botánico...</p>
+                    <p class="text-gray-600 dark:text-slate-300">Cargando gráfico botánico...</p>
                 </div>
             </div>
         </div>
@@ -73,39 +73,39 @@
 </section>
 
 <!-- SECCIÓN 3: Lotes - Listón Horizontal Inferior -->
-<section class="bg-gray-50 py-6">
+<section class="bg-gray-50 dark:bg-slate-900 py-6 transition-colors duration-300">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div id="lotes-carousel-container" class="bg-white rounded-lg shadow-sm p-6" data-user-id="{{ user.id if user else 'None' }}">
-            <h3 class="text-xl font-bold text-gray-800 mb-4 text-center">Mis Lotes</h3>
+        <div id="lotes-carousel-container" class="bg-white dark:bg-slate-800 rounded-lg shadow-sm p-6 transition-colors duration-300" data-user-id="{{ user.id if user else 'None' }}">
+            <h3 class="text-xl font-bold text-gray-800 dark:text-slate-200 mb-4 text-center">Mis Lotes</h3>
             <div id="lotes-carousel" class="flex justify-center overflow-x-auto space-x-3 py-2">
                 <!-- Los botones de los lotes se insertarán aquí dinámicamente -->
-                <p class="text-gray-500 text-sm">Cargando lotes...</p>
+                <p class="text-gray-500 dark:text-slate-400 text-sm">Cargando lotes...</p>
             </div>
         </div>
     </div>
 </section>
 
 <!-- SECCIÓN 4: QR del Lote Seleccionado -->
-<section id="lote-qr-section" class="bg-white py-8 border-b" style="display: none;">
+<section id="lote-qr-section" class="bg-white dark:bg-slate-800 py-8 border-b border-slate-200 dark:border-slate-700 transition-colors duration-300" style="display: none;">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <h2 class="text-2xl font-bold text-gray-800 mb-2">Código QR del Lote</h2>
-        <p id="lote-qr-nombre" class="text-lg text-gray-600 mb-4">Selecciona un lote para ver su QR</p>
+        <h2 class="text-2xl font-bold text-gray-800 dark:text-slate-200 mb-2">Código QR del Lote</h2>
+        <p id="lote-qr-nombre" class="text-lg text-gray-600 dark:text-slate-300 mb-4">Selecciona un lote para ver su QR</p>
         
         <div class="flex justify-center items-center space-x-8">
             <!-- Contenedor del QR -->
-            <div id="lote-qr-code-container" class="bg-gray-50 rounded-lg p-4 inline-block shadow-md">
-                <img id="lote-qr-image" src="" alt="Código QR del lote" class="w-48 h-48 mx-auto" style="display: none;">
-                <div id="lote-qr-placeholder" class="w-48 h-48 flex items-center justify-center">
-                    <p class="text-gray-500">El QR aparecerá aquí</p>
+            <div id="lote-qr-code-container" class="bg-gray-50 dark:bg-slate-700 rounded-lg p-4 inline-block shadow-md transition-colors duration-300">
+                <img id="lote-qr-image" src="" alt="Código QR del lote" class="w-24 h-24 mx-auto" style="display: none;">
+                <div id="lote-qr-placeholder" class="w-24 h-24 flex items-center justify-center">
+                    <p class="text-gray-500 dark:text-slate-400">El QR aparecerá aquí</p>
                 </div>
             </div>
 
             <!-- Acciones del QR -->
             <div class="flex flex-col space-y-3">
-                <button id="lote-generate-qr-btn" class="bg-blue-500 text-white px-5 py-2 rounded-lg font-semibold hover:bg-blue-600 transition-colors shadow-sm" disabled>
+                <button id="lote-generate-qr-btn" class="bg-blue-500 dark:bg-blue-600 text-white px-5 py-2 rounded-lg font-semibold hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors shadow-sm" disabled>
                     <i class="fas fa-sync-alt mr-2"></i>Generar QR
                 </button>
-                <button id="lote-download-qr-btn" class="bg-green-500 text-white px-5 py-2 rounded-lg font-semibold hover:bg-green-600 transition-colors shadow-sm" disabled>
+                <button id="lote-download-qr-btn" class="bg-green-500 dark:bg-green-600 text-white px-5 py-2 rounded-lg font-semibold hover:bg-green-600 dark:hover:bg-green-700 transition-colors shadow-sm" disabled>
                     <i class="fas fa-download mr-2"></i>Descargar QR
                 </button>
             </div>
@@ -115,10 +115,10 @@
 
 <!-- Edit Profile Button for Authenticated Users -->
 {% if g.user and g.user.user_uuid == user.id %}
-<section class="bg-white border-b">
+<section class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 transition-colors duration-300">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <div class="flex justify-center">
-            <a href="/edit-profile" class="bg-primary text-white px-6 py-3 rounded-lg font-semibold hover:bg-amber-600 transition-colors shadow-md">
+            <a href="/edit-profile" class="bg-primary dark:bg-amber-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-amber-600 dark:hover:bg-amber-600 transition-colors shadow-md">
                 <i class="fas fa-edit mr-2"></i>Editar Perfil
             </a>
         </div>
@@ -127,28 +127,28 @@
 {% endif %}
 
 <!-- Profile Content -->
-<section class="py-12">
+<section class="py-12 bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <!-- Main Info -->
             <div class="lg:col-span-2">
                 <!-- About Section -->
-                <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
-                    <h2 class="text-xl font-semibold text-slate-900 mb-4">Sobre mí</h2>
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 mb-6 transition-colors duration-300">
+                    <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-200 mb-4">Sobre mí</h2>
                     <div class="space-y-6">
                     <!-- Información Completa de Usuarios -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="bg-slate-50 rounded-lg p-4">
-                            <h4 class="font-semibold text-slate-700 mb-2">Username</h4>
-                            <p class="text-slate-600 text-lg font-medium">{{ user.username or 'No disponible' }}</p>
+                        <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 transition-colors duration-300">
+                            <h4 class="font-semibold text-slate-700 dark:text-slate-300 mb-2">Username</h4>
+                            <p class="text-slate-600 dark:text-slate-400 text-lg font-medium">{{ user.username or 'No disponible' }}</p>
                         </div>
-                        <div class="bg-slate-50 rounded-lg p-4">
-                            <h4 class="font-semibold text-slate-700 mb-2">Rol</h4>
-                            <p class="text-slate-600">{{ user.role or 'Usuario' }}</p>
+                        <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 transition-colors duration-300">
+                            <h4 class="font-semibold text-slate-700 dark:text-slate-300 mb-2">Rol</h4>
+                            <p class="text-slate-600 dark:text-slate-400">{{ user.role or 'Usuario' }}</p>
                         </div>
-                        <div class="bg-slate-50 rounded-lg p-4">
-                            <h4 class="font-semibold text-slate-700 mb-2">Estado</h4>
-                            <p class="text-slate-600">
+                        <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 transition-colors duration-300">
+                            <h4 class="font-semibold text-slate-700 dark:text-slate-300 mb-2">Estado</h4>
+                            <p class="text-slate-600 dark:text-slate-400">
                                 <span class="px-2 py-1 rounded-full text-xs font-medium
                                     {{ 'bg-green-100 text-green-800' if user.status == 'active' else 'bg-yellow-100 text-yellow-800' }}">
                                     {{ user.status or 'Active' }}
@@ -163,50 +163,50 @@
                 </div>
 
                 <!-- Información de Contacto Completa -->
-                <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
-                    <h2 class="text-xl font-semibold text-slate-900 mb-4">Información de Contacto</h2>
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 mb-6 transition-colors duration-300">
+                    <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-200 mb-4">Información de Contacto</h2>
                     
                     {% if contact_info %}
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {% if contact_info.nombre_completo %}
-                        <div class="bg-slate-50 rounded-lg p-4">
-                            <h4 class="font-semibold text-slate-700 mb-2">Nombre Completo</h4>
-                            <p class="text-slate-600">{{ contact_info.nombre_completo }}</p>
+                        <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 transition-colors duration-300">
+                            <h4 class="font-semibold text-slate-700 dark:text-slate-300 mb-2">Nombre Completo</h4>
+                            <p class="text-slate-600 dark:text-slate-400">{{ contact_info.nombre_completo }}</p>
                         </div>
                         {% endif %}
                         
                         {% if contact_info.nombre_empresa %}
-                        <div class="bg-slate-50 rounded-lg p-4">
-                            <h4 class="font-semibold text-slate-700 mb-2">Empresa</h4>
-                            <p class="text-slate-600">{{ contact_info.nombre_empresa }}</p>
+                        <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 transition-colors duration-300">
+                            <h4 class="font-semibold text-slate-700 dark:text-slate-300 mb-2">Empresa</h4>
+                            <p class="text-slate-600 dark:text-slate-400">{{ contact_info.nombre_empresa }}</p>
                         </div>
                         {% endif %}
                         
                         {% if contact_info.correo_principal %}
-                        <div class="bg-slate-50 rounded-lg p-4">
-                            <h4 class="font-semibold text-slate-700 mb-2">Correo Principal</h4>
-                            <a href="mailto:{{ contact_info.correo_principal }}" class="text-slate-600 hover:text-primary">{{ contact_info.correo_principal }}</a>
+                        <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 transition-colors duration-300">
+                            <h4 class="font-semibold text-slate-700 dark:text-slate-300 mb-2">Correo Principal</h4>
+                            <a href="mailto:{{ contact_info.correo_principal }}" class="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-amber-400">{{ contact_info.correo_principal }}</a>
                         </div>
                         {% endif %}
                         
                         {% if contact_info.telefono_principal %}
-                        <div class="bg-slate-50 rounded-lg p-4">
-                            <h4 class="font-semibold text-slate-700 mb-2">Teléfono Principal</h4>
-                            <a href="tel:{{ contact_info.telefono_principal }}" class="text-slate-600 hover:text-primary">{{ contact_info.telefono_principal }}</a>
+                        <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 transition-colors duration-300">
+                            <h4 class="font-semibold text-slate-700 dark:text-slate-300 mb-2">Teléfono Principal</h4>
+                            <a href="tel:{{ contact_info.telefono_principal }}" class="text-slate-600 dark:text-slate-400 hover:text-primary dark:hover:text-amber-400">{{ contact_info.telefono_principal }}</a>
                         </div>
                         {% endif %}
                         
                         {% if contact_info.direccion %}
-                        <div class="bg-slate-50 rounded-lg p-4">
-                            <h4 class="font-semibold text-slate-700 mb-2">Dirección</h4>
-                            <p class="text-slate-600">{{ contact_info.direccion }}</p>
+                        <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 transition-colors duration-300">
+                            <h4 class="font-semibold text-slate-700 dark:text-slate-300 mb-2">Dirección</h4>
+                            <p class="text-slate-600 dark:text-slate-400">{{ contact_info.direccion }}</p>
                         </div>
                         {% endif %}
                         
                         {% if contact_info.comuna or contact_info.region %}
-                        <div class="bg-slate-50 rounded-lg p-4">
-                            <h4 class="font-semibold text-slate-700 mb-2">Ubicación</h4>
-                            <p class="text-slate-600">
+                        <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 transition-colors duration-300">
+                            <h4 class="font-semibold text-slate-700 dark:text-slate-300 mb-2">Ubicación</h4>
+                            <p class="text-slate-600 dark:text-slate-400">
                                 {% if contact_info.comuna and contact_info.region %}
                                     {{ contact_info.comuna }}, {{ contact_info.region }}
                                 {% elif contact_info.comuna %}
@@ -219,27 +219,27 @@
                         {% endif %}
                     </div>
                     {% else %}
-                    <div class="text-slate-500 text-center py-4">
+                    <div class="text-slate-500 dark:text-slate-400 text-center py-4">
                         <p>No hay información de contacto disponible</p>
                     </div>
                     {% endif %}
                 </div>
 
                 <!-- Oficinas Apícolas -->
-                <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
-                    <h2 class="text-xl font-semibold text-slate-900 mb-4">Oficinas Apícolas</h2>
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 mb-6 transition-colors duration-300">
+                    <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-200 mb-4">Oficinas Apícolas</h2>
                     
                     {% if locations %}
                     <div class="space-y-4">
                         {% for ubicacion in locations %}
-                        <div class="bg-slate-50 rounded-lg p-4">
-                            <h4 class="font-semibold text-slate-700 mb-2">Oficina {{ loop.index }}</h4>
+                        <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-4 transition-colors duration-300">
+                            <h4 class="font-semibold text-slate-700 dark:text-slate-300 mb-2">Oficina {{ loop.index }}</h4>
                             
                             {% if ubicacion.latitud is not none and ubicacion.longitud is not none %}
                             <div class="flex items-center space-x-2">
                                 <a href="https://www.google.com/maps?q={{ ubicacion.latitud }},{{ ubicacion.longitud }}" 
                                    target="_blank" 
-                                   class="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-700 rounded-md text-sm hover:bg-blue-200 transition-colors">
+                                   class="inline-flex items-center px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-md text-sm hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors">
                                     <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -248,7 +248,7 @@
                                 </a>
                             </div>
                             {% else %}
-                            <div class="text-slate-500 text-sm">
+                            <div class="text-slate-500 dark:text-slate-400 text-sm">
                                 <p>Sin coordenadas</p>
                             </div>
                             {% endif %}
@@ -256,7 +256,7 @@
                         {% endfor %}
                     </div>
                     {% else %}
-                    <div class="text-slate-500 text-center py-4">
+                    <div class="text-slate-500 dark:text-slate-400 text-center py-4">
                         <p>No hay ubicaciones registradas</p>
                     </div>
                     {% endif %}
@@ -264,11 +264,11 @@
 
                 <!-- Specialties -->
                 {% if user.especialidades %}
-                <div class="bg-white rounded-xl shadow-sm p-6">
-                    <h2 class="text-xl font-semibold text-slate-900 mb-4">Especialidades</h2>
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 transition-colors duration-300">
+                    <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-200 mb-4">Especialidades</h2>
                     <div class="flex flex-wrap gap-2">
                         {% for especialidad in user.especialidades %}
-                        <span class="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
+                        <span class="px-3 py-1 bg-primary/10 dark:bg-amber-900/30 text-primary dark:text-amber-400 rounded-full text-sm font-medium">
                             {{ especialidad }}
                         </span>
                         {% endfor %}
@@ -280,25 +280,25 @@
             <!-- Sidebar -->
             <div class="lg:col-span-1">
                 <!-- QR Code -->
-                <div class="bg-white rounded-xl shadow-sm p-6 mb-6">
-                    <h3 class="text-lg font-semibold text-slate-900 mb-4 text-center">Código QR</h3>
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 mb-6 transition-colors duration-300">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200 mb-4 text-center">Código QR</h3>
                     <div class="text-center">
-                        <div class="bg-slate-50 rounded-lg p-6 inline-block">
+                        <div class="bg-slate-50 dark:bg-slate-700 rounded-lg p-6 inline-block transition-colors duration-300">
                             {% if user %}
                             <img id="qr-image" src="/api/usuario/{{ user.id[:8] }}/qr?format=png" alt="QR Code" class="w-40 h-40 mx-auto">
-                            <p class="text-sm text-slate-600 mt-2">Escanea para ver perfil</p>
+                            <p class="text-sm text-slate-600 dark:text-slate-400 mt-2">Escanea para ver perfil</p>
                             {% else %}
-                            <div class="w-40 h-40 bg-slate-200 rounded-lg flex items-center justify-center mx-auto">
-                                <span class="text-slate-500 text-sm">QR no disponible</span>
+                            <div class="w-40 h-40 bg-slate-200 dark:bg-slate-600 rounded-lg flex items-center justify-center mx-auto">
+                                <span class="text-slate-500 dark:text-slate-400 text-sm">QR no disponible</span>
                             </div>
                             {% endif %}
                         </div>
                         <div class="space-y-2 mt-4">
                             {% if user %}
-                            <button onclick="generateQR()" class="w-full bg-blue-500 text-white py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium">
+                            <button onclick="generateQR()" class="w-full bg-blue-500 dark:bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-600 dark:hover:bg-blue-700 transition-colors text-sm font-medium">
                                 Generar QR
                             </button>
-                            <button onclick="downloadQR()" class="w-full bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors text-sm font-medium">
+                            <button onclick="downloadQR()" class="w-full bg-green-500 dark:bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-600 dark:hover:bg-green-700 transition-colors text-sm font-medium">
                                 Descargar QR
                             </button>
                             {% endif %}
@@ -307,22 +307,22 @@
                 </div>
 
                 <!-- Quick Actions -->
-                <div class="bg-white rounded-xl shadow-sm p-6">
-                    <h3 class="text-lg font-semibold text-slate-900 mb-4">Acciones Rápidas</h3>
+                <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-6 transition-colors duration-300">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-200 mb-4">Acciones Rápidas</h3>
                     <div class="space-y-3">
                         {% if user.email %}
-                        <a href="mailto:{{ user.email }}" class="w-full bg-secondary text-white py-2 px-4 rounded-lg hover:bg-emerald-600 transition-colors text-sm font-medium text-center block">
+                        <a href="mailto:{{ user.email }}" class="w-full bg-secondary dark:bg-emerald-600 text-white py-2 px-4 rounded-lg hover:bg-emerald-600 dark:hover:bg-emerald-700 transition-colors text-sm font-medium text-center block">
                             Enviar Email
                         </a>
                         {% endif %}
                         
                         {% if user.telefono %}
-                        <a href="https://wa.me/{{ user.telefono }}" target="_blank" class="w-full bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors text-sm font-medium text-center block">
+                        <a href="https://wa.me/{{ user.telefono }}" target="_blank" class="w-full bg-green-500 dark:bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-600 dark:hover:bg-green-700 transition-colors text-sm font-medium text-center block">
                             WhatsApp
                         </a>
                         {% endif %}
                         
-                        <button onclick="shareProfile()" class="w-full bg-slate-600 text-white py-2 px-4 rounded-lg hover:bg-slate-700 transition-colors text-sm font-medium">
+                        <button onclick="shareProfile()" class="w-full bg-slate-600 dark:bg-slate-700 text-white py-2 px-4 rounded-lg hover:bg-slate-700 dark:hover:bg-slate-800 transition-colors text-sm font-medium">
                             Compartir Perfil
                         </button>
                     </div>
@@ -331,7 +331,7 @@
         </div>
         
         <!-- Barra separadora para botones futuros -->
-        <div class=" w-full mt-8 pt-4 border-t border-white border-opacity-30\></div>
+        <div class="w-full mt-8 pt-4 border-t border-slate-200 dark:border-slate-700 transition-colors duration-300"></div>
     </div>
 </section>
 
