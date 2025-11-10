@@ -97,6 +97,61 @@ def get_current_user():
         logger.error(f"Error al obtener usuario actual: {str(e)}")
         return jsonify({"success": False, "error": "Error interno del servidor"}), 500
 
+@search_bp.route('/profile/me', methods=['GET'])
+def get_my_profile_complete():
+    """
+    NUEVO endpoint API REST para Flutter.
+    Obtiene datos COMPLETOS del usuario autenticado: usuarios + info_contacto.
+    Usa el MISMO método que /profile (searcher.get_user_profile_data)
+    
+    GET /api/profile/me
+    
+    Returns:
+        JSON con todos los datos de usuarios + info_contacto
+    """
+    try:
+        # Verificar autenticación
+        if 'user_id' not in session:
+            return jsonify({"success": False, "error": "Usuario no autenticado"}), 401
+        
+        current_user_id = session['user_id']
+        logger.info(f"[API /profile/me] Obteniendo datos completos para: {current_user_id}")
+        
+        # Usar el MISMO método que usa /profile para obtener datos completos
+        profile_data = searcher.get_user_profile_data(current_user_id)
+        
+        if not profile_data:
+            logger.warning(f"[API /profile/me] Usuario no encontrado: {current_user_id}")
+            return jsonify({"success": False, "error": "Usuario no encontrado"}), 404
+        
+        # Combinar datos de usuario e info_contacto en un solo objeto
+        user_data = profile_data.get('user') or {}
+        contact_data = profile_data.get('contact_info') or {}
+        
+        # Crear objeto completo combinando ambas tablas
+        complete_user = {
+            **user_data,  # Todos los campos de usuarios
+            'nombre_completo': contact_data.get('nombre_completo'),
+            'nombre_empresa': contact_data.get('nombre_empresa'),
+            'correo_principal': contact_data.get('correo_principal'),
+            'telefono_principal': contact_data.get('telefono_principal'),
+            'direccion': contact_data.get('direccion'),
+            'comuna': contact_data.get('comuna'),
+            'region': contact_data.get('region'),
+        }
+        
+        logger.info(f"[API /profile/me] Datos completos obtenidos exitosamente")
+        
+        return jsonify({
+            "success": True,
+            "user_id": current_user_id,
+            "user": complete_user
+        })
+        
+    except Exception as e:
+        logger.error(f"[API /profile/me] Error: {str(e)}")
+        return jsonify({"success": False, "error": "Error interno del servidor"}), 500
+
 @search_bp.route('/usuario/<uuid_segment>/qr', methods=['GET'])
 @AuthManager.login_required
 def get_user_qr(uuid_segment):
