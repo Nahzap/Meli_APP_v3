@@ -16,6 +16,7 @@ from flask import session, request, redirect, url_for, flash, g, jsonify, curren
 import uuid
 from datetime import datetime, timedelta
 import time
+import traceback
 from supabase_client import db
 
 logger = logging.getLogger(__name__)
@@ -673,13 +674,26 @@ class AuthManager:
                 'p_nombre_empresa': company if company else None
             }).execute()
             
-            logger.info(f"Respuesta de función DB: {result.data}")
+            logger.info(f"Respuesta de función DB (raw): {result}")
+            logger.info(f"Respuesta de función DB (data): {result.data}")
             
-            if result.data and result.data.get('success'):
+            # Parsear respuesta - puede venir como string o dict
+            response_data = result.data
+            if isinstance(response_data, str):
+                import json
+                try:
+                    response_data = json.loads(response_data)
+                except:
+                    logger.error(f"❌ No se pudo parsear respuesta: {response_data}")
+                    return False
+            
+            logger.info(f"Respuesta parseada: {response_data}")
+            
+            if response_data and response_data.get('success'):
                 logger.info(f"✅ Inicialización completa exitosa para: {email}")
                 return True
             else:
-                error_msg = result.data.get('message', 'Error desconocido') if result.data else 'Sin respuesta'
+                error_msg = response_data.get('message', 'Error desconocido') if response_data else 'Sin respuesta'
                 logger.error(f"❌ Error en función DB: {error_msg}")
                 return False
                 
