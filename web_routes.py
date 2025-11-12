@@ -122,7 +122,7 @@ def edit_profile():
                          user_location=user_location)
 
 # ====================
-# OAuth Callback
+# OAuth & Email Confirmation Callbacks
 # ====================
 
 @web_bp.route('/auth/callback')
@@ -137,3 +137,17 @@ def oauth_callback():
     """
     # Renderizar página que maneja tokens en fragmento
     return render_template('auth/oauth-callback.html')
+
+@web_bp.route('/auth/confirm')
+def email_confirmation_callback():
+    """
+    Callback de confirmación de email.
+    
+    GET /auth/confirm
+    
+    Supabase redirige aquí cuando el usuario hace click en el email de confirmación.
+    Los tokens vienen en el fragmento (#) de la URL, similar a OAuth.
+    Esta página HTML extrae los tokens con JavaScript y los procesa.
+    """
+    # Renderizar página que maneja confirmación de email
+    return render_template('auth/email-confirmation.html')
