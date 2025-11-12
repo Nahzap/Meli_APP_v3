@@ -17,6 +17,8 @@ import uuid
 from datetime import datetime, timedelta
 import time
 import traceback
+import json
+import re
 from supabase_client import db
 
 logger = logging.getLogger(__name__)
@@ -664,30 +666,55 @@ class AuthManager:
             logger.info(f"Datos: full_name='{full_name}', company='{role}'")
             
             # Llamar a la función de base de datos que bypasea RLS
-            result = db.client.rpc('initialize_new_user', {
-                'p_auth_user_id': auth_user_id,
-                'p_email': email,
-                'p_username': full_name,
-                'p_tipo_usuario': role,
-                'p_role': role,
-                'p_nombre_completo': full_name,
-                'p_nombre_empresa': company if company else None
-            }).execute()
+            # NOTA: postgrest lanza APIError incluso en casos exitosos cuando devuelve JSON custom
+            try:
+                result = db.client.rpc('initialize_new_user', {
+                    'p_auth_user_id': auth_user_id,
+                    'p_email': email,
+                    'p_username': full_name,
+                    'p_tipo_usuario': role,
+                    'p_role': role,
+                    'p_nombre_completo': full_name,
+                    'p_nombre_empresa': company if company else None
+                }).execute()
+                
+                logger.info(f"Respuesta de función DB: {result.data}")
+                response_data = result.data
+                
+            except Exception as rpc_error:
+                # Capturar APIError que puede contener respuesta exitosa
+                logger.info(f"⚠️ Excepción RPC (puede ser falso positivo): {rpc_error}")
+                
+                # Intentar extraer la respuesta del error
+                error_str = str(rpc_error)
+                
+                # Buscar JSON en details
+                if 'details' in error_str:
+                    # Extraer JSON del mensaje de error
+                    match = re.search(r"'details':\s*'b\\?'({.*?})'", error_str)
+                    if match:
+                        json_str = match.group(1)
+                        try:
+                            response_data = json.loads(json_str)
+                            logger.info(f"✅ JSON extraído del error: {response_data}")
+                        except:
+                            logger.error(f"❌ No se pudo parsear JSON del error")
+                            raise
+                    else:
+                        logger.error(f"❌ No se encontró JSON en el error")
+                        raise
+                else:
+                    raise
             
-            logger.info(f"Respuesta de función DB (raw): {result}")
-            logger.info(f"Respuesta de función DB (data): {result.data}")
-            
-            # Parsear respuesta - puede venir como string o dict
-            response_data = result.data
+            # Parsear respuesta si es string
             if isinstance(response_data, str):
-                import json
                 try:
                     response_data = json.loads(response_data)
                 except:
                     logger.error(f"❌ No se pudo parsear respuesta: {response_data}")
                     return False
             
-            logger.info(f"Respuesta parseada: {response_data}")
+            logger.info(f"📊 Respuesta final parseada: {response_data}")
             
             if response_data and response_data.get('success'):
                 logger.info(f"✅ Inicialización completa exitosa para: {email}")
