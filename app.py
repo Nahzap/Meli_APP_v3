@@ -188,7 +188,7 @@ def get_base_url():
         return site_url.rstrip('/')
     
     # Prioridad 3: Dominio personalizado para producción
-    custom_domain = "meli-app-v3.vercel.app"
+    custom_domain = "meliapp-cloud.vercel.app"
     if os.getenv('VERCEL') == '1':
         return f"https://{custom_domain}"
     
@@ -205,7 +205,7 @@ def get_base_url():
         
         # Forzar dominio personalizado en producción
         if 'vercel.app' in host:
-            return "https://meli-app-v3.vercel.app"
+            return "https://meliapp-cloud.vercel.app"
         
         return f"{scheme}://{host}"
     except RuntimeError:
@@ -215,7 +215,7 @@ def print_welcome_message():
     """Muestra un mensaje de bienvenida completo con la arquitectura actual del proyecto."""
     base_url = get_base_url()
     welcome_msg = f"""
-=== 🍯 MELI APP v3.0 - ARQUITECTURA ACTUALIZADA ===
+=== 🍯 MELI APP CLOUD - ARQUITECTURA ACTUALIZADA ===
 
 📊 **ESTADO DEL SISTEMA:**
 ✅ Conexión con Supabase establecida
